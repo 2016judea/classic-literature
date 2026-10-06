@@ -253,7 +253,11 @@ for w in works:
                      "turn": max(range(5, PARTS - 5), key=lambda i: abs(s[i + 5] - s[i - 5])),
                      "range": r(max(s) - min(s), 5)})
 SENT_CACHE.write_text(json.dumps(cache))
-write("sentiment.json", {"parts": PARTS, "window": WIN, "method": "TextBlob polarity per 1% of the book, 9-part centred mean; momentum = change per 1% of the book, x100", "arcs": arcs})
+# The page needs only the smoothed arc up front (momentum is its first difference, taken in the
+# browser); the unsmoothed scores load on demand when a single novel is picked.
+slim = [{k: (v if k != "smooth" else [round(x, 3) for x in v]) for k, v in a.items() if k not in ("raw", "momentum")} for a in arcs]
+write("sentiment.json", {"parts": PARTS, "window": WIN, "method": "TextBlob polarity per 1% of the book, 9-part centred mean; momentum = change per 1% of the book, x100", "arcs": slim})
+write("sentiment_raw.json", {str(a["work"]): a["raw"] for a in arcs})
 print("works", len(works), "arcs", len(arcs))
 
 # ---------------------------------------------------------------- Ask context (api/_context.json)

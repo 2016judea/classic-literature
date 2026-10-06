@@ -9,8 +9,35 @@
   const pct = x => Math.round(x * 100) + "%";
   const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : null; };
 
-  const [G, SEN, INF, PR, GR] = await Promise.all(["genres", "sentiment", "influence", "prose", "graphs"].map(n => fetch(`data/${n}.json`).then(r => r.json())));
+  // Chrome first, before the data lands, so nothing shifts when it does.
+  const dataP = Promise.all(["genres", "sentiment", "influence", "prose", "graphs"].map(n => fetch(`data/${n}.json`).then(r => r.json())));
+  let READY = false;
+  const PAGES = [
+    { id: "sentiment", name: "Sentiment momentum", short: "Sentiment", sub: "Feeling across a novel" },
+    { id: "genres", name: "Genre mutations", short: "Genres", sub: "Genres from prose alone" },
+    { id: "influence", name: "Influence network", short: "Influence", sub: "Who shaped whom" },
+    { id: "prose", name: "Prose similarity", short: "Prose", sub: "Who writes like whom" },
+    { id: "atlas", name: "Atlas", short: "Atlas", sub: "Everything, one graph" },
+  ];
+  const ICON = { sentiment: "M3 17l5-6 4 3 6-8 3 4", genres: "M5 4v16M12 4v16M19 4v16M5 9h7M12 15h7", influence: "M6 6a2 2 0 1 0 0 .1M18 6a2 2 0 1 0 0 .1M12 18a2 2 0 1 0 0 .1M7.5 7.5l3.5 9M16.5 7.5l-3.5 9M8 6h8", prose: "M4 7h10M4 12h16M4 17h7", atlas: "M12 3l8 4.5v9L12 21l-8-4.5v-9z M12 3v18 M4 7.5l16 9 M20 7.5l-16 9" };
+  const rail = $("#rail");
+  PAGES.forEach(p => { const b = el("button", "", `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON[p.id]}"/></svg><b>${p.name}</b><i>${p.short}</i><small>${p.sub}</small>`); b.dataset.p = p.id; b.onclick = () => READY && go(p.id); rail.append(b); });
+  const initialPage = (() => { try { return new URLSearchParams(location.hash.slice(1)).get("p") || "sentiment"; } catch (e) { return "sentiment"; } })();
+  function setTitle(id) { const p = PAGES.find(x => x.id === id) || PAGES[0]; $("#ptitle").innerHTML = `<h1>${p.name}</h1><span>${p.sub}</span>`; rail.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.p === id)); }
+  setTitle(initialPage);
+  // Chips: one scrollable row on a phone; on desktop the first four, then "More". The order rotates
+  // daily so a returning visitor sees different questions first.
+  const chips = $("#chips");
+  const rot = Math.floor(Date.now() / 864e5) % CHIPS.length;
+  const order = [...CHIPS.slice(rot), ...CHIPS.slice(0, rot)];
+  order.forEach((c, k) => { const b = el("button", k >= 4 ? "extra" : "", esc(c.q)); b.onclick = () => { $("#askq").value = c.q; if (READY) ask(c.q); }; chips.append(b); });
+  const more = el("button", "more", `More questions (${order.length - 4})`); more.onclick = () => { chips.classList.toggle("open"); more.textContent = chips.classList.contains("open") ? "Fewer" : `More questions (${order.length - 4})`; }; chips.append(more);
+
+  const [G, SEN, INF, PR, GR] = await dataP;
   const works = G.works;
+  SEN.arcs.forEach(a => (a.momentum = a.smooth.map((v, i) => (i ? +((v - a.smooth[i - 1]) * 100).toFixed(3) : 0))));
+  let RAW = null, rawLoading = false;
+  const needRaw = () => { if (RAW || rawLoading) return; rawLoading = true; fetch("data/sentiment_raw.json").then(r => r.json()).then(j => { RAW = j; SEN.arcs.forEach(a => (a.raw = RAW[a.work])); if (READY) refresh(); }); };
   const arcBy = new Map(SEN.arcs.map(a => [a.work, a]));
   works.forEach(w => (w.arc = arcBy.get(w.id) || null));
   const genreName = i => (i == null ? "Unassigned" : G.genres[i].name);
@@ -38,15 +65,6 @@
   const D = { works, authorsAll, genres: G, influence: INF, prose: PR, graphs: GR, sentiment: SEN, filterWorks: f => filterWorks({ ...f, work: "" }, { noCohort: true }), cohortWorks: c => { const s = cohortAuthors(c); return works.filter(w => s.has(w.author)); } };
 
   // ------------------------------------------------------------------ chrome
-  const PAGES = [
-    { id: "sentiment", name: "Sentiment momentum", sub: "Feeling across a novel" },
-    { id: "genres", name: "Genre mutations", sub: "Genres from prose alone" },
-    { id: "influence", name: "Influence network", sub: "Who shaped whom" },
-    { id: "prose", name: "Prose similarity", sub: "Who writes like whom" },
-    { id: "atlas", name: "Atlas", sub: "Everything, one graph" },
-  ];
-  const rail = $("#rail");
-  PAGES.forEach(p => { const b = el("button", "", `<b>${p.name}</b><small>${p.sub}</small>`); b.dataset.p = p.id; b.onclick = () => go(p.id); rail.append(b); });
 
   function fillSelect(sel, opts, val, all) {
     sel.innerHTML = `<option value="">${all}</option>` + opts.map(o => `<option value="${esc(o[0])}">${esc(o[1])}</option>`).join("");
@@ -65,9 +83,16 @@
     if (S.cohort) { const s = el("span", "", `cohort: <b>${S.cohort.rel === "heirs" ? "writers " + esc(S.cohort.author) + " influenced" : "writers who influenced " + esc(S.cohort.author)}</b>`); const x = el("button", "", "✕"); x.onclick = () => { S.cohort = null; refresh(); }; s.append(x); c.append(s); }
     if (S.path) { const s = el("span", "", `chain: <b>${esc(S.path[0])} → ${esc(S.path[1] || "…")}</b>`); const x = el("button", "", "✕"); x.onclick = () => { S.path = null; refresh(); }; s.append(x); c.append(s); }
     if (S.shape) { const s = el("span", "", `shape: <b>${S.shape}</b>`); const x = el("button", "", "✕"); x.onclick = () => { S.shape = ""; refresh(); }; s.append(x); c.append(s); }
+    const nF = Object.values(S.f).filter(Boolean).length + (S.cohort ? 1 : 0) + (S.path ? 1 : 0) + (S.shape ? 1 : 0);
+    $("#mfilters").textContent = nF ? `Filters (${nF})` : "Filters";
     try { const p = new URLSearchParams({ p: S.page, ...Object.fromEntries(Object.entries(S.f).filter(([, v]) => v)) }); history.replaceState(null, "", "#" + p); } catch (e) {}
   }
   for (const k of ["author", "work", "genre", "from", "to"]) $("#f-" + k).onchange = e => { S.f[k] = e.target.value; if (k === "author" || k === "genre") { if (S.f.work && !filterWorks({ ...S.f, work: "" }).some(w => w.title === S.f.work)) S.f.work = ""; } S.hl = []; refresh(); };
+  // Phone: the slicers live in a bottom sheet behind one "Filters (n)" button.
+  $("#mfilters").onclick = () => { $("#slicers").classList.add("open"); $("#scrim-f").hidden = false; };
+  const closeFilters = () => { $("#slicers").classList.remove("open"); $("#scrim-f").hidden = true; };
+  $("#sdone").onclick = closeFilters; $("#scrim-f").onclick = closeFilters;
+  $("#mstory").onclick = () => $("#story").click();
   $("#clear").onclick = () => { S.f = { author: "", work: "", genre: "", from: "", to: "" }; S.shape = ""; S.hl = []; S.path = null; S.cohort = null; refresh(); };
   $("#theme").onclick = () => {
     const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
@@ -83,7 +108,7 @@
   function base() {
     return {
       animationDuration: 600, animationDurationUpdate: 700, animationEasingUpdate: "cubicInOut",
-      textStyle: { fontFamily: "Inter, system-ui, sans-serif", color: css("--ink-2") },
+      textStyle: { fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", color: css("--ink-2") },
       grid: { left: 44, right: 14, top: 18, bottom: 34, containLabel: false },
       tooltip: { backgroundColor: css("--surface"), borderColor: css("--border"), textStyle: { color: css("--ink"), fontSize: 12 }, extraCssText: "box-shadow:0 4px 16px rgba(0,0,0,.15);border-radius:6px" },
     };
@@ -98,34 +123,108 @@
     if (!t) {
       t = el("div", "tile " + cls); t.id = "t-" + id;
       const h = el("header", "", `<h3></h3>`); const tools = el("div", "tools");
-      const fb = el("button", "", "⤢"); fb.title = "Focus mode"; fb.setAttribute("aria-label", "Focus mode"); fb.onclick = () => focus(id);
-      tools.append(fb); h.append(tools); t.append(h);
+      const fb = el("button", "", '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>'); fb.title = "Focus mode"; fb.setAttribute("aria-label", "Focus mode"); fb.onclick = () => focus(id);
+      const rb = el("button", "reset", '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/></svg>'); rb.title = "Reset view"; rb.setAttribute("aria-label", "Reset view"); rb.onclick = () => resetView(id);
+      tools.append(rb, fb); h.append(tools); t.append(h);
       t.append(el("div", "sub", sub || ""));
       t.append(el("div", kind === "chart" ? "chart" : "body"));
       $("#grid").append(t);
     }
-    t.querySelector("h3").textContent = title; t.querySelector(".sub").textContent = sub || "";
+    t.querySelector("h3").textContent = title;
+    t.querySelector(".sub").textContent = PHONE() ? (sub || "").replace(/(Pinch or scroll to zoom|[Pp]inch to zoom)\.?/, "Open full screen to pinch and pan.") : sub || "";
     t.classList.toggle("lit", S.lit === id);
     return t.querySelector(kind === "chart" ? ".chart" : ".body");
   }
+  // Charts render lazily: a tile's latest option waits until echarts has loaded and the tile is
+  // within 300px of the viewport. A slicer change only re-renders tiles already drawn.
+  const PHONE = () => matchMedia("(max-width: 760px)").matches;
+  const pending = new Map(), visible = new Set();
+  const echartsReady = new Promise(res => { if (window.echarts) return res(); const tag = document.getElementById("ec"); tag.addEventListener("load", res); if (window.echarts) res(); });
+  let EC = false; echartsReady.then(() => { EC = true; pending.forEach((_, id) => flush(id)); });
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { visible.add(e.target.dataset.id); flush(e.target.dataset.id); } }), { rootMargin: "300px 0px" });
   function chart(id, title, sub, cls, opt, onClick) {
     const node = tile(id, title, sub, cls);
+    if (!node.dataset.id) { node.dataset.id = id; io.observe(node); }
+    pending.set(id, { opt, onClick });
+    flush(id);
+  }
+  // A tile that changes height (story mode, focus, rotation) redraws its chart to fit.
+  const ro = new ResizeObserver(es => es.forEach(e => { const c = charts.get(e.target.dataset.id); if (c && !c.isDisposed()) { c.resize(); if (PHONE() && isGraph(c.getOption())) fitGraph(c); } }));
+  const isGraph = o => o.series && o.series.some(se => se.type === "graph");
+  function flush(id) {
+    const job = pending.get(id); if (!job || !EC || !visible.has(id)) return;
+    const node = document.querySelector(`#t-${id} .chart`); if (!node) { pending.delete(id); return; }
+    pending.delete(id);
     let c = charts.get(id);
-    if (!c || c.getDom() !== node) { c = echarts.init(node, null, { renderer: "canvas" }); charts.set(id, c); }
-    const { __replace, ...o } = opt;
-    // A force layout tuned for a 900px tile flies off a phone: scale its spring lengths to the tile.
-    if (o.series && node.clientWidth < 600) o.series.forEach(se => { if (se.type === "graph" && se.force) { const k = Math.max(0.45, node.clientWidth / 900);
-      se.force = { ...se.force, repulsion: Math.round(se.force.repulsion * k), edgeLength: Array.isArray(se.force.edgeLength) ? se.force.edgeLength.map(v => Math.round(v * k)) : Math.round(se.force.edgeLength * k), gravity: (se.force.gravity || 0.1) * 1.4 }; } });
+    if (!c || c.getDom() !== node) { c = echarts.init(node, null, { renderer: "canvas" }); charts.set(id, c); ro.observe(node); }
+    const { __replace, ...o } = job.opt;
+    const graph = isGraph(o), phone = PHONE(), focused = S.focus === id;
+    node.closest(".tile").classList.toggle("is-graph", graph);
+    if (graph) {
+      o.series.forEach(se => {
+        if (se.type !== "graph") return;
+        // A force layout tuned for a 900px tile flies off a phone: scale its springs to the tile.
+        if (se.force && node.clientWidth < 600) { const k = Math.max(0.45, node.clientWidth / 900);
+          se.force = { ...se.force, repulsion: Math.round(se.force.repulsion * k), edgeLength: Array.isArray(se.force.edgeLength) ? se.force.edgeLength.map(v => Math.round(v * k)) : Math.round(se.force.edgeLength * k), gravity: (se.force.gravity || 0.1) * 1.4 }; }
+        if (phone) {
+          // Phone: the page scrolls past a graph; pinch and pan only inside focus mode. Labels
+          // only on the biggest nodes and anything already emphasised, until the graph is focused.
+          se.roam = focused ? true : false; se.draggable = focused && se.draggable;
+          if (!focused && se.data) {
+            const sizes = se.data.map(d => (Array.isArray(d.symbolSize) ? 999 : d.symbolSize || 0)).sort((a, b) => b - a);
+            const cut = sizes[Math.min(sizes.length - 1, 7)] || 0;
+            se.data.forEach(d => { if (d.label && d.label.show && !Array.isArray(d.symbolSize) && (d.symbolSize || 0) < cut && !((d.itemStyle || {}).borderWidth > 2)) d.label = { ...d.label, show: false }; });
+          }
+          if (se.force) se.force = { ...se.force, layoutAnimation: false };
+        }
+      });
+      if (phone) o.tooltip = { ...(o.tooltip || {}), show: false, __fmt: (o.tooltip || {}).formatter };
+    }
+    const fmtFn = o.tooltip && o.tooltip.__fmt; if (o.tooltip) delete o.tooltip.__fmt;
     c.setOption({ ...base(), ...o }, { notMerge: !!__replace, lazyUpdate: false, replaceMerge: ["series", "xAxis", "yAxis", "visualMap"] });
-    c.off("click"); if (onClick) c.on("click", onClick);
-    return c;
+    c.off("click"); c.getZr().off("click");
+    if (graph && phone) {
+      fitGraph(c);
+      // A tap picks the nearest node within 26px (a 52px target) and opens its card.
+      c.getZr().on("click", ev => {
+        const se = c.getModel().getSeriesByIndex(0); if (!se) return; const data = se.getData();
+        let best = -1, bd = 26;
+        for (let i = 0; i < data.count(); i++) { const l = data.getItemLayout(i); if (!l) continue; const pt = c.convertToPixel({ seriesIndex: 0 }, l); const d = Math.hypot(pt[0] - ev.offsetX, pt[1] - ev.offsetY); if (d < bd) { bd = d; best = i; } }
+        if (best < 0) return;
+        const raw = o.series[0].data[best];
+        const params = { dataType: "node", data: raw, name: raw.name, dataIndex: best };
+        sheet(fmtFn ? fmtFn(params) : esc(raw.name), job.onClick ? () => job.onClick(params) : null);
+      });
+    } else if (job.onClick) c.on("click", job.onClick);
+  }
+  // Fit the whole laid-out graph inside its tile: pan its centre to the tile's, then zoom.
+  function fitGraph(c) {
+    const se = c.getModel().getSeriesByIndex(0); if (!se) return; const data = se.getData();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < data.count(); i++) { const l = data.getItemLayout(i); if (!l) continue; const p = c.convertToPixel({ seriesIndex: 0 }, l); x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+    if (!isFinite(x0)) return;
+    const W = c.getWidth(), H = c.getHeight(), top = 34;
+    const z = Math.min(1.6, (W - 36) / Math.max(1, x1 - x0), (H - top - 24) / Math.max(1, y1 - y0));
+    c.dispatchAction({ type: "graphRoam", seriesIndex: 0, dx: W / 2 - (x0 + x1) / 2, dy: (H + top) / 2 - (y0 + y1) / 2 });
+    c.dispatchAction({ type: "graphRoam", seriesIndex: 0, zoom: z, originX: W / 2, originY: (H + top) / 2 });
+  }
+  function resetView(id) { const c = charts.get(id); if (!c) return; const s = c.getOption().series[0]; c.setOption({ series: [{ zoom: 1, center: null }] }); fitGraph(c); }
+  // Bottom sheet: graph node cards on a phone, and the filter panel.
+  function sheet(html, action) {
+    let sh = $("#sheet");
+    if (!sh) { sh = el("div", "sheet"); sh.id = "sheet"; sh.setAttribute("role", "dialog"); document.body.append(sh); }
+    sh.innerHTML = `<div class="sheet-body">${html}</div><div class="sheet-act">${action ? '<button class="primary" id="sheet-go">Focus on this</button>' : ""}<button class="ghost" id="sheet-x">Close</button></div>`;
+    sh.classList.add("open");
+    $("#sheet-x").onclick = () => sh.classList.remove("open");
+    if (action) $("#sheet-go").onclick = () => { sh.classList.remove("open"); action(); };
   }
   function focus(id) {
     const t = document.getElementById("t-" + id);
-    if (S.focus) { document.querySelector(".scrim")?.remove(); document.querySelector(".tile.focus")?.classList.remove("focus"); const was = S.focus; S.focus = null; setTimeout(() => charts.get(was)?.resize(), 20); if (was === id) return; }
+    const redraw = i => { const c = charts.get(i); if (!c) return; c.resize(); if (PHONE() && isGraph(c.getOption())) { refresh(); } };
+    if (S.focus) { document.querySelector(".scrim")?.remove(); document.querySelector(".tile.focus")?.classList.remove("focus"); const was = S.focus; S.focus = null; setTimeout(() => redraw(was), 20); if (was === id) return; }
     S.focus = id; t.classList.add("focus");
     const sc = el("div", "scrim"); sc.onclick = () => focus(id); document.body.append(sc);
-    setTimeout(() => charts.get(id)?.resize(), 20);
+    setTimeout(() => redraw(id), 20);
   }
   document.addEventListener("keydown", e => { if (e.key === "Escape" && S.focus) focus(S.focus); });
   window.addEventListener("resize", () => charts.forEach(c => c.resize()));
@@ -186,8 +285,9 @@
       { name: "Middle 50%", type: "line", data: hi.map((h, i) => h - lo[i]), stack: "band", lineStyle: { opacity: 0 }, symbol: "none", areaStyle: { color: C[0], opacity: 0.12 }, silent: true, tooltip: { show: false } },
       { name: `Mean of ${set.length}`, type: "line", data: mean, symbol: "none", lineStyle: { width: 2, color: C[0] }, itemStyle: { color: C[0] } },
     ];
+    if (sel && !sel.arc.raw) needRaw();
     if (sel) {
-      series.push({ name: `${sel.title} (raw)`, type: "line", data: sel.arc.raw, symbol: "none", lineStyle: { width: 1, color: css("--muted"), opacity: 0.7 }, itemStyle: { color: css("--muted") } });
+      if (sel.arc.raw) series.push({ name: `${sel.title} (raw)`, type: "line", data: sel.arc.raw, symbol: "none", lineStyle: { width: 1, color: css("--muted"), opacity: 0.7 }, itemStyle: { color: css("--muted") } });
       series.push({ name: sel.title, type: "line", data: sel.arc.smooth, symbol: "none", lineStyle: { width: 2.5, color: C[1] }, itemStyle: { color: C[1] },
         markPoint: { symbol: "circle", symbolSize: 10, itemStyle: { color: C[1], borderColor: css("--surface"), borderWidth: 2 }, label: { show: true, position: "top", color: css("--ink"), fontSize: 11, formatter: `sharpest turn ${sel.arc.turn}%` }, data: [{ coord: [sel.arc.turn, sel.arc.smooth[sel.arc.turn]] }] } });
     }
@@ -596,10 +696,10 @@
   // ------------------------------------------------------------------ render loop
   function render(force) {
     if (force || lastPage !== S.page) {
-      charts.forEach(c => c.dispose()); charts.clear();
+      charts.forEach(c => c.dispose()); charts.clear(); pending.clear(); visible.clear(); io.disconnect();
       $("#page").innerHTML = '<div id="grid" class="grid"></div>';
     }
-    rail.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.p === S.page));
+    setTitle(S.page);
     syncSlicers();
     ({ sentiment: pageSentiment, genres: pageGenres, influence: pageInfluence, prose: pageProse, atlas: pageAtlas })[S.page]();
     lastPage = S.page;
@@ -663,24 +763,20 @@
     $("#story-step").textContent = `Story · ${PAGES.find(p => p.id === S.page).name}`;
     $("#story-text").textContent = st.t();
     $("#story-count").textContent = `${story + 1} of ${steps.length}`;
+    requestAnimationFrame(() => document.documentElement.style.setProperty("--card", $("#storybar").offsetHeight + "px"));
+    $("#story-prog").style.width = `${((story + 1) / steps.length) * 100}%`;
+    document.body.classList.add("story-on");
     $("#story-back").disabled = story === 0;
     $("#story-next").textContent = story === steps.length - 1 ? "Done" : "Next";
-    document.getElementById("t-" + st.lit)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById("t-" + st.lit)?.scrollIntoView({ behavior: "smooth", block: PHONE() ? "start" : "center" });
   }
-  function stopStory() { story = null; S.lit = null; $("#storybar").hidden = true; document.querySelectorAll(".tile.lit").forEach(t => t.classList.remove("lit")); }
+  function stopStory() { story = null; S.lit = null; $("#storybar").hidden = true; document.body.classList.remove("story-on"); document.querySelectorAll(".tile.lit").forEach(t => t.classList.remove("lit")); }
   $("#story").onclick = () => { story = 0; $("#storybar").hidden = false; showStep(); };
   $("#story-next").onclick = () => { if (story >= STORIES[S.page].length - 1) { stopStory(); return; } story++; showStep(); };
   $("#story-back").onclick = () => { if (story > 0) { story--; showStep(); } };
   $("#story-close").onclick = stopStory;
 
   // ------------------------------------------------------------------ ask
-  // Chips: one scrollable row on a phone; on desktop the first four, then "More". The order rotates
-  // daily so a returning visitor sees different questions first.
-  const chips = $("#chips");
-  const rot = Math.floor(Date.now() / 864e5) % CHIPS.length;
-  const order = [...CHIPS.slice(rot), ...CHIPS.slice(0, rot)];
-  order.forEach((c, k) => { const b = el("button", k >= 4 ? "extra" : "", esc(c.q)); b.onclick = () => { $("#askq").value = c.q; ask(c.q); }; chips.append(b); });
-  const more = el("button", "more", `More questions (${order.length - 4})`); more.onclick = () => { chips.classList.toggle("open"); more.textContent = chips.classList.contains("open") ? "Fewer" : `More questions (${order.length - 4})`; }; chips.append(more);
   function clean(spec) {
     const ok = (v, list) => (v && list.includes(v) ? v : "");
     const f = spec.filters || {};
@@ -705,7 +801,7 @@
     const a = $("#answer"); a.hidden = false;
     a.innerHTML = `<p>${spec.answer ? esc(spec.answer) + "<br>" : ""}<b>${esc(read)}</b></p><span class="src">${spec.source === "claude" ? "Claude, over this data" : "Parsed locally"}</span><button aria-label="Dismiss answer">✕</button>`;
     a.querySelector("button").onclick = () => { a.hidden = true; S.lit = null; refresh(); };
-    if (spec.focus) setTimeout(() => document.getElementById("t-" + spec.focus)?.scrollIntoView({ behavior: "smooth", block: "center" }), 120);
+    if (spec.focus) setTimeout(() => document.getElementById("t-" + spec.focus)?.scrollIntoView({ behavior: "smooth", block: PHONE() ? "start" : "center" }), 150);
   }
   async function ask(q) {
     q = (q || "").trim(); if (!q) return;
@@ -720,5 +816,6 @@
   }
   $("#ask").onsubmit = e => { e.preventDefault(); ask($("#askq").value); };
 
+  READY = true;
   render();
 })();

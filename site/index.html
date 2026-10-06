@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Classic Literature Analytics</title>
-<meta name="description" content="An analytics workspace over 343 classic novels and 77 authors: sentiment momentum, genre mutations, influence, and prose similarity.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta name="description" content="An analytics workspace over classic novels and their authors: sentiment momentum, genre mutations, influence, and prose similarity.">
 <link rel="stylesheet" href="app.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+<link rel="preload" href="data/genres.json" as="fetch" crossorigin>
+<link rel="preload" href="data/sentiment.json" as="fetch" crossorigin>
+<script id="ec" async src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -24,7 +24,13 @@
   <div class="answer" id="answer" hidden></div>
   <nav class="rail" id="rail" aria-label="Report pages"></nav>
   <main class="main">
+    <div class="ptitle" id="ptitle"></div>
+    <div class="mbar">
+      <button class="ghost" id="mfilters" type="button">Filters</button>
+      <button class="story-btn" id="mstory" type="button">▶ Story</button>
+    </div>
     <div class="slicers" id="slicers">
+      <div class="sheet-head"><b>Filters</b><button class="ghost" id="sdone" type="button">Done</button></div>
       <label>Author<select id="f-author"></select></label>
       <label>Work<select id="f-work"></select></label>
       <label>Genre<select id="f-genre"></select></label>
@@ -37,7 +43,9 @@
     <section class="page" id="page"></section>
     <footer class="foot" id="foot"></footer>
   </main>
+  <div class="scrim-f" id="scrim-f" hidden></div>
   <div class="storybar" id="storybar" hidden>
+    <div class="story-prog"><i id="story-prog"></i></div>
     <div class="story-step" id="story-step"></div>
     <div class="story-text" id="story-text"></div>
     <div class="story-nav">
@@ -48,8 +56,8 @@
     </div>
   </div>
 </div>
-<script src="ask-local.js"></script>
-<script src="chips.js"></script>
-<script src="app.js"></script>
+<script src="ask-local.js" defer></script>
+<script src="chips.js" defer></script>
+<script src="app.js" defer></script>
 </body>
 </html>
