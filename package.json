@@ -1,0 +1,8 @@
+{
+  "name": "classic-literature",
+  "private": true,
+  "description": "A Power BI-style analytics workspace over classic literature research.",
+  "scripts": { "build-data": ".venv/bin/python scripts/build_data.py", "test": "node --test test/*.test.js" },
+  "dependencies": { "@anthropic-ai/sdk": "^0.131.0" },
+  "engines": { "node": ">=20" }
+}
