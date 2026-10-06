@@ -9,7 +9,7 @@
   const pct = x => Math.round(x * 100) + "%";
   const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : null; };
 
-  const [G, SEN, INF, PR] = await Promise.all(["genres", "sentiment", "influence", "prose"].map(n => fetch(`data/${n}.json`).then(r => r.json())));
+  const [G, SEN, INF, PR, GR] = await Promise.all(["genres", "sentiment", "influence", "prose", "graphs"].map(n => fetch(`data/${n}.json`).then(r => r.json())));
   const works = G.works;
   const arcBy = new Map(SEN.arcs.map(a => [a.work, a]));
   works.forEach(w => (w.arc = arcBy.get(w.id) || null));
@@ -22,15 +22,20 @@
   const PERSONA = { mccarthy: "Cormac McCarthy", melville: "Herman Melville", shakespeare: "William Shakespeare" };
 
   // ------------------------------------------------------------------ state
-  const S = { page: "sentiment", f: { author: "", work: "", genre: "", from: "", to: "" }, shape: "", metric: "stylistic", hl: [], focus: null, lit: null };
+  const S = { page: "sentiment", f: { author: "", work: "", genre: "", from: "", to: "" }, shape: "", metric: "stylistic", hl: [], focus: null, lit: null, path: null, infColor: "form", top: 5, atlasWorks: false };
   try { const p = new URLSearchParams(location.hash.slice(1)); if (p.get("p")) S.page = p.get("p"); for (const k of Object.keys(S.f)) if (p.get(k)) S.f[k] = p.get(k); } catch (e) {}
 
   function inRange(y) { return (!S.f.from || y >= +S.f.from) && (!S.f.to || y <= +S.f.to + 9); }
   function filterWorks(f = S.f, opts = {}) {
     return works.filter(w => (!f.author || w.author === f.author) && (!f.genre || genreName(w.genre) === f.genre) &&
-      (!f.from || w.year >= +f.from) && (!f.to || w.year <= +f.to + 9) && (opts.ignoreWork || !f.work || w.title === f.work));
+      (!f.from || w.year >= +f.from) && (!f.to || w.year <= +f.to + 9) && (opts.ignoreWork || !f.work || w.title === f.work) &&
+      (opts.noCohort || !S.cohort || cohortSet().has(w.author)));
   }
-  const D = { works, authorsAll, genres: G, influence: INF, prose: PR, filterWorks: f => filterWorks({ ...f, work: "" }) };
+  let _cs = null, _ck = "";
+  function cohortSet() { const k = JSON.stringify(S.cohort); if (k !== _ck) { _ck = k; _cs = cohortAuthors(S.cohort); } return _cs; }
+  // A cohort is a cross-page filter: the writers who influenced X, or the writers X influenced.
+  function cohortAuthors(c) { return new Set(INF.documented.filter(d => (c.rel === "heirs" ? d.from === c.author : d.to === c.author)).map(d => (c.rel === "heirs" ? d.to : d.from))); }
+  const D = { works, authorsAll, genres: G, influence: INF, prose: PR, graphs: GR, sentiment: SEN, filterWorks: f => filterWorks({ ...f, work: "" }, { noCohort: true }), cohortWorks: c => { const s = cohortAuthors(c); return works.filter(w => s.has(w.author)); } };
 
   // ------------------------------------------------------------------ chrome
   const PAGES = [
@@ -38,6 +43,7 @@
     { id: "genres", name: "Genre mutations", sub: "Genres from prose alone" },
     { id: "influence", name: "Influence network", sub: "Who shaped whom" },
     { id: "prose", name: "Prose similarity", sub: "Who writes like whom" },
+    { id: "atlas", name: "Atlas", sub: "Everything, one graph" },
   ];
   const rail = $("#rail");
   PAGES.forEach(p => { const b = el("button", "", `<b>${p.name}</b><small>${p.sub}</small>`); b.dataset.p = p.id; b.onclick = () => go(p.id); rail.append(b); });
@@ -56,11 +62,13 @@
     fillSelect($("#f-to"), DECADES.map(d => [d, d + "s"]), S.f.to, "Any");
     const c = $("#crumbs"); c.innerHTML = "";
     for (const [k, v] of Object.entries(S.f)) if (v) { const s = el("span", "", `${k === "from" || k === "to" ? k : k}: <b>${esc(k === "from" || k === "to" ? v + "s" : v)}</b>`); const x = el("button", "", "✕"); x.setAttribute("aria-label", "Remove filter"); x.onclick = () => { S.f[k] = ""; refresh(); }; s.append(x); c.append(s); }
+    if (S.cohort) { const s = el("span", "", `cohort: <b>${S.cohort.rel === "heirs" ? "writers " + esc(S.cohort.author) + " influenced" : "writers who influenced " + esc(S.cohort.author)}</b>`); const x = el("button", "", "✕"); x.onclick = () => { S.cohort = null; refresh(); }; s.append(x); c.append(s); }
+    if (S.path) { const s = el("span", "", `chain: <b>${esc(S.path[0])} → ${esc(S.path[1] || "…")}</b>`); const x = el("button", "", "✕"); x.onclick = () => { S.path = null; refresh(); }; s.append(x); c.append(s); }
     if (S.shape) { const s = el("span", "", `shape: <b>${S.shape}</b>`); const x = el("button", "", "✕"); x.onclick = () => { S.shape = ""; refresh(); }; s.append(x); c.append(s); }
     try { const p = new URLSearchParams({ p: S.page, ...Object.fromEntries(Object.entries(S.f).filter(([, v]) => v)) }); history.replaceState(null, "", "#" + p); } catch (e) {}
   }
   for (const k of ["author", "work", "genre", "from", "to"]) $("#f-" + k).onchange = e => { S.f[k] = e.target.value; if (k === "author" || k === "genre") { if (S.f.work && !filterWorks({ ...S.f, work: "" }).some(w => w.title === S.f.work)) S.f.work = ""; } S.hl = []; refresh(); };
-  $("#clear").onclick = () => { S.f = { author: "", work: "", genre: "", from: "", to: "" }; S.shape = ""; S.hl = []; refresh(); };
+  $("#clear").onclick = () => { S.f = { author: "", work: "", genre: "", from: "", to: "" }; S.shape = ""; S.hl = []; S.path = null; S.cohort = null; refresh(); };
   $("#theme").onclick = () => {
     const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
     document.documentElement.dataset.theme = dark ? "light" : "dark";
@@ -81,6 +89,8 @@
     };
   }
   const axis = (o = {}) => ({ axisLine: { lineStyle: { color: css("--axis") } }, axisTick: { show: false }, axisLabel: { color: css("--muted"), fontSize: 11 }, splitLine: { lineStyle: { color: css("--grid") } }, nameTextStyle: { color: css("--muted"), fontSize: 11 }, ...o });
+  // On a touch screen a one-finger drag must still scroll the page, so graphs pinch-zoom only.
+  const ROAM = matchMedia("(pointer: coarse)").matches ? "scale" : true;
   const SER = () => [1, 2, 3, 4, 5, 6, 7, 8].map(i => css("--s" + i));
 
   function tile(id, title, sub, cls, kind = "chart") {
@@ -103,6 +113,9 @@
     let c = charts.get(id);
     if (!c || c.getDom() !== node) { c = echarts.init(node, null, { renderer: "canvas" }); charts.set(id, c); }
     const { __replace, ...o } = opt;
+    // A force layout tuned for a 900px tile flies off a phone: scale its spring lengths to the tile.
+    if (o.series && node.clientWidth < 600) o.series.forEach(se => { if (se.type === "graph" && se.force) { const k = Math.max(0.45, node.clientWidth / 900);
+      se.force = { ...se.force, repulsion: Math.round(se.force.repulsion * k), edgeLength: Array.isArray(se.force.edgeLength) ? se.force.edgeLength.map(v => Math.round(v * k)) : Math.round(se.force.edgeLength * k), gravity: (se.force.gravity || 0.1) * 1.4 }; } });
     c.setOption({ ...base(), ...o }, { notMerge: !!__replace, lazyUpdate: false, replaceMerge: ["series", "xAxis", "yAxis", "visualMap"] });
     c.off("click"); if (onClick) c.on("click", onClick);
     return c;
@@ -116,6 +129,31 @@
   }
   document.addEventListener("keydown", e => { if (e.key === "Escape" && S.focus) focus(S.focus); });
   window.addEventListener("resize", () => charts.forEach(c => c.resize()));
+
+  // A tile's control strip (toggles, sliders) sits between its subtitle and its plot.
+  function controls(id, html, bind) {
+    const t = document.getElementById("t-" + id); let c = t.querySelector(".ctl");
+    if (!c) { c = el("div", "ctl"); t.querySelector(".sub").after(c); }
+    c.innerHTML = html; if (bind) bind(c);
+  }
+  // A community is named after its best-connected member, so the legend reads "Nietzsche's circle".
+  function communityNames(lab, names, deg) {
+    const best = {};
+    lab.forEach((k, i) => { const d = (deg && deg[names[i]]) || 0; if (!best[k] || d > best[k][1]) best[k] = [names[i], d]; });
+    return Object.keys(best).sort((a, b) => a - b).map(k => `${best[k][0].split(" ").pop()}'s circle`);
+  }
+  // Fewest documented links between two authors, either direction (BFS).
+  function findPath(a, b, docs) {
+    const nb = new Map();
+    docs.forEach(d => { for (const [x, y] of [[d.from, d.to], [d.to, d.from]]) { if (!nb.has(x)) nb.set(x, []); nb.get(x).push([y, d]); } });
+    const prev = new Map([[a, null]]); const q = [a];
+    while (q.length) { const x = q.shift(); if (x === b) break; for (const [y, d] of nb.get(x) || []) if (!prev.has(y)) { prev.set(y, [x, d]); q.push(y); } }
+    if (!prev.has(b) || a === b) return null;
+    const nodes = [b], edges = []; let cur = b;
+    while (prev.get(cur)) { const [x, d] = prev.get(cur); edges.unshift(d); nodes.unshift(x); cur = x; }
+    return { nodes, edges };
+  }
+  D.findPath = (a, b) => findPath(a, b, INF.documented);
 
   function kpis(items) {
     let k = $("#kpis"); if (!k) { k = el("div", "kpis"); k.id = "kpis"; $("#page").prepend(k); }
@@ -189,6 +227,25 @@
         { type: "scatter", name: "Selected", symbolSize: 14, data: sel ? pts.filter(p => p.id === sel.id) : [], itemStyle: { color: C[1], borderColor: css("--surface"), borderWidth: 2 }, label: { show: true, position: "right", formatter: p => p.data.name, color: css("--ink"), fontSize: 11 } },
       ],
     }, p => { if (p.data && p.data.name) { S.f.work = S.f.work === p.data.name ? "" : p.data.name; refresh(); } });
+    // Arc-shape families: each novel linked to the 5 whose smoothed arcs correlate best with it.
+    const AG = GR.arc; const SH = ["Rise", "Fall", "Rise–fall", "Fall–rise"];
+    const inSetG = new Set(set.map(w => w.id));
+    const anyFilter = S.f.author || S.f.genre || S.f.from || S.f.to || S.shape;
+    const gNodes = SEN.arcs.map((a, i) => { const w = works[a.work]; const on = inSetG.has(w.id); const me = sel && sel.id === w.id;
+      return { id: String(i), name: w.title, value: a.shape, category: SH.indexOf(a.shape), symbolSize: me ? 16 : on && anyFilter ? 9 : 6,
+        a: w.author, y: w.year, g: genreName(w.genre), wid: w.id,
+        itemStyle: { opacity: !anyFilter && !sel ? 0.9 : on || me ? 1 : 0.1, borderColor: me ? css("--ink") : css("--surface"), borderWidth: me ? 2.5 : 0.8 },
+        label: { show: !!me, color: css("--ink"), fontSize: 11 } }; });
+    const nbr = sel ? new Set(AG.edges.filter(e => works[SEN.arcs[e[0]].work].id === sel.id || works[SEN.arcs[e[1]].work].id === sel.id).flatMap(e => [e[0], e[1]])) : null;
+    if (nbr) nbr.forEach(i => { gNodes[i].itemStyle.opacity = 1; gNodes[i].label.show = true; });
+    const gLinks = AG.edges.map(([a, b, r]) => ({ source: String(a), target: String(b), value: r, lineStyle: { width: nbr && nbr.has(a) && nbr.has(b) ? 1.8 : 0.6, opacity: nbr ? (nbr.has(a) && nbr.has(b) ? 0.8 : 0.03) : anyFilter ? (inSetG.has(works[SEN.arcs[a].work].id) && inSetG.has(works[SEN.arcs[b].work].id) ? 0.4 : 0.03) : 0.18, color: css("--muted") } }));
+    chart("s-graph", "Families of arc shapes", `Each novel joined to the ${AG.k} novels whose arcs move most like it (correlation, median r ${fmt(AG.median_r, 2)}). ${pct(AG.same_shape_neighbours)} of those neighbours share its shape, against ${pct(AG.same_shape_chance)} by chance. Tap a novel to pick it; pinch to zoom.`, "w12 h2", {
+      __replace: true,
+      tooltip: { ...base().tooltip, trigger: "item", formatter: p => p.dataType === "edge" ? `arc correlation r ${fmt(p.data.value, 2)}` : `<b>${esc(p.data.name)}</b><br>${esc(p.data.a)}, ${p.data.y}<br>${esc(p.data.g)}<br>shape: ${p.data.value}` },
+      legend: { top: 0, left: 8, data: SH, textStyle: { color: css("--ink-2"), fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
+      series: [{ type: "graph", layout: "force", roam: ROAM, draggable: false, top: 30, bottom: 6, data: gNodes, links: gLinks, categories: SH.map((n, i) => ({ name: n, itemStyle: { color: C[i] } })),
+        force: { repulsion: 48, edgeLength: 22, gravity: 0.05, friction: 0.3, layoutAnimation: true }, emphasis: { focus: "adjacency" }, labelLayout: { hideOverlap: true } }],
+    }, p => { if (p.dataType === "node") { S.f.work = S.f.work === p.data.name ? "" : p.data.name; refresh(); } });
     const body = tile("s-table", "Novels in view", "Click a row to pick the work. Sorted by how far the ending falls from the start.", "w12", "body");
     const rows = set.slice().sort((a, b) => (a.arc.end - a.arc.start) - (b.arc.end - b.arc.start)).slice(0, 150);
     body.innerHTML = `<table class="t"><thead><tr><th>Title</th><th>Author</th><th class="num">Year</th><th>Genre</th><th>Shape</th><th class="num">Start</th><th class="num">End</th><th class="num">Δ</th></tr></thead><tbody>` +
@@ -232,6 +289,32 @@
       tb.querySelectorAll("[data-g]").forEach(d => (d.onclick = () => { S.f.genre = d.dataset.g; refresh(); }));
     }
     const decs = DECADES;
+    // Genre and author as one bipartite graph: genres pinned along the timeline at the year each
+    // cluster forms, authors pulled toward every genre they wrote in. A bridge author sits between.
+    const gEl = tile("g-graph", "Genres and the authors who cross them", "Genres pinned at the year their cluster forms (left to right); authors pulled toward each genre they wrote in. Authors between two genres are the bridges. Tap a genre or an author to filter.", "w12 h2");
+    gEl.style.minHeight = "440px";
+    const W = Math.max(320, gEl.clientWidth || 800), H = Math.max(300, gEl.clientHeight || 340);
+    const y0 = Math.min(...G.genres.map(g => g.birth_year)), y1 = Math.max(...G.genres.map(g => g.birth_year));
+    const rank = []; G.genres.map((g, i) => [g.birth_year, i]).sort((a, b) => a[0] - b[0]).forEach(([, i], k) => (rank[i] = k));
+    const byAuthor = {}; set.forEach(w => { if (w.genre == null) return; (byAuthor[w.author] = byAuthor[w.author] || {})[w.genre] = ((byAuthor[w.author] || {})[w.genre] || 0) + 1; });
+    const bridges = Object.entries(byAuthor).filter(([, gs]) => Object.keys(gs).length > 1).length;
+    const gN = G.genres.map((g, i) => ({ id: "g" + i, name: g.name, category: i, symbol: "roundRect", symbolSize: [Math.min(130, 30 + g.name.replace(" fiction", "").length * 5.6), 22], fixed: true,
+      x: W * (0.09 + 0.82 * (rank[i] / (G.genres.length - 1))), y: H * [0.22, 0.78, 0.5][rank[i] % 3], kind: "genre", n: set.filter(w => w.genre === i).length, born: g.birth_year,
+      itemStyle: { color: C[i], opacity: !gsel || gsel === g.name ? 1 : 0.25, borderRadius: 4 }, label: { show: true, color: "#fff", fontSize: 10.5, fontWeight: 600, formatter: g.name.replace(" fiction", "") }, z: 10 }));
+    const aN = Object.entries(byAuthor).map(([a, gs]) => { const n = Object.values(gs).reduce((x, y) => x + y, 0); const multi = Object.keys(gs).length > 1;
+      const top = +Object.entries(gs).sort((x, y) => y[1] - x[1])[0][0];
+      return { id: "a:" + a, name: a, category: top, symbolSize: 4 + Math.sqrt(n) * 3, kind: "author", gs, n, multi,
+        itemStyle: { opacity: S.f.author ? (S.f.author === a ? 1 : 0.2) : 0.85, borderColor: S.f.author === a ? css("--ink") : css("--surface"), borderWidth: S.f.author === a ? 2 : 0.6 },
+        label: { show: S.f.author === a || (multi && n >= 4), color: css("--ink"), fontSize: 10.5 } }; });
+    const gL = aN.flatMap(a => Object.entries(a.gs).map(([gi, k]) => ({ source: a.id, target: "g" + gi, value: k, lineStyle: { color: C[+gi], width: Math.min(4, 0.6 + k * 0.5), opacity: S.f.author ? (S.f.author === a.name ? 0.9 : 0.05) : 0.35 } })));
+    chart("g-graph", "", "", "w12 h2", {
+      __replace: true,
+      tooltip: { ...base().tooltip, trigger: "item", formatter: p => p.dataType === "edge" ? `${esc(p.data.source.slice(2))}: ${p.data.value} novel${p.data.value > 1 ? "s" : ""} in this genre` : p.data.kind === "genre" ? `<b>${esc(p.data.name)}</b><br>forms ${p.data.born}<br>${p.data.n} novels in view` : `<b>${esc(p.data.name)}</b><br>${p.data.n} novels in view<br>${Object.entries(p.data.gs).map(([g, k]) => `${esc(G.genres[g].name)}: ${k}`).join("<br>")}` },
+      series: [{ type: "graph", layout: "force", roam: ROAM, top: 10, bottom: 10, data: [...gN, ...aN], links: gL, categories: G.genres.map((g, i) => ({ name: g.name, itemStyle: { color: C[i] } })),
+        force: { repulsion: 22, edgeLength: [16, 60], gravity: 0.06, friction: 0.25 }, emphasis: { focus: "adjacency" }, labelLayout: { hideOverlap: true } }],
+    }, p => { if (p.dataType !== "node") return; if (p.data.kind === "genre") S.f.genre = gsel === p.data.name ? "" : p.data.name; else S.f.author = S.f.author === p.data.name ? "" : p.data.name; refresh(); });
+    document.querySelector("#t-g-graph h3").textContent = "Genres and the authors who cross them";
+    document.querySelector("#t-g-graph .sub").textContent = `Genres in the order their clusters form, left to right (${y0}–${y1}); ${aN.length} authors pulled toward each genre they wrote in. ${bridges} write in more than one: the bridges. Tap a genre or author to filter.`;
     chart("g-density", "Novels per decade, by genre", "Corpus density. Most of the apparent 'acceleration' in genre change is this curve. Click a decade to filter to it.", "w12", {
       tooltip: { ...base().tooltip, trigger: "axis", axisPointer: { type: "shadow" } },
       legend: { top: 0, type: "scroll", textStyle: { color: css("--ink-2"), fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
@@ -297,35 +380,60 @@
       { v: `z ${fmt(v.known.stylistic.z, 1)}`, l: "Prose, barely: stylistic echo", s: `mean ${v.known.stylistic.real_mean} vs null ${v.known.stylistic.null_mean}` },
     ]);
     const deg = {}; docs.forEach(d => { deg[d.from] = (deg[d.from] || 0) + 1; deg[d.to] = (deg[d.to] || 0) + 1; });
+    const path = S.path && S.path[0] && S.path[1] ? findPath(S.path[0], S.path[1], docs) : null;
+    const onPath = new Set(path ? path.nodes : []);
+    const pathEdge = new Set(path ? path.edges.map(e => e.from + ">" + e.to) : []);
     const adj = new Set(sel ? [sel, ...docs.filter(d => d.from === sel || d.to === sel).map(d => (d.from === sel ? d.to : d.from))] : []);
+    const lit = n => (path ? onPath.has(n) : sel ? adj.has(n) : true);
     const hl = new Set(S.hl);
+    const byComm = S.infColor === "community";
+    const comm = GR.influence.community;
+    const commNames = communityNames(comm, A.map(a => a.name), deg);
+    const cats = byComm ? commNames.map((n, i) => ({ name: n, itemStyle: { color: C[i % 8] } })) : FORMS.map((f, i) => ({ name: FORM_LABEL[f], itemStyle: { color: C[i] } }));
+    // A chain is pinned in a straight line across the middle so every link of it is on screen.
+    const gBox = document.querySelector("#t-i-graph .chart"); const gw = gBox ? gBox.clientWidth : 800, gh = gBox ? gBox.clientHeight : 340;
+    const pin = n => { const k = path ? path.nodes.indexOf(n) : -1; if (k < 0) return {}; const t = path.nodes.length > 1 ? k / (path.nodes.length - 1) : 0.5; return { fixed: true, x: gw * (0.14 + 0.64 * t), y: gh * (0.55 + (k % 2 ? -0.12 : 0.12)) }; };
     const nodes = A.filter(a => inView.has(a.name)).map(a => ({
-      name: a.name, value: deg[a.name] || 0, category: FORMS.indexOf(a.form), symbolSize: 6 + Math.sqrt(deg[a.name] || 0) * 4.2,
-      itemStyle: { opacity: sel ? (adj.has(a.name) ? 1 : 0.15) : 1, borderColor: a.name === sel || hl.has(a.name) ? css("--ink") : css("--surface"), borderWidth: a.name === sel || hl.has(a.name) ? 2.5 : 1 },
-      label: { show: (deg[a.name] || 0) >= 6 || adj.has(a.name) || hl.has(a.name), color: css("--ink"), fontSize: 11, opacity: sel && !adj.has(a.name) ? 0.2 : 1 },
-      year: a.earliest_year, form: a.form,
+      ...pin(a.name),
+      name: a.name, value: deg[a.name] || 0, category: byComm ? comm[A.indexOf(a)] : FORMS.indexOf(a.form), symbolSize: 6 + Math.sqrt(deg[a.name] || 0) * 4.2,
+      itemStyle: { opacity: lit(a.name) ? 1 : 0.12, borderColor: a.name === sel || hl.has(a.name) || onPath.has(a.name) ? css("--ink") : css("--surface"), borderWidth: a.name === sel || hl.has(a.name) || onPath.has(a.name) ? 2.5 : 1 },
+      label: { show: path ? onPath.has(a.name) : (deg[a.name] || 0) >= 6 || adj.has(a.name) || hl.has(a.name), position: onPath.has(a.name) ? "top" : "inside", color: css("--ink"), fontSize: onPath.has(a.name) ? 12 : 11, fontWeight: onPath.has(a.name) ? 600 : 400, opacity: lit(a.name) ? 1 : 0.2 },
+      year: a.earliest_year, form: a.form, comm: commNames[comm[A.indexOf(a)]],
     }));
-    const links = docs.map(d => ({ source: d.from, target: d.to, value: d.conceptual, lineStyle: { opacity: sel ? (d.from === sel || d.to === sel ? 0.9 : 0.04) : 0.28, width: sel && (d.from === sel || d.to === sel) ? 2 : 1, color: sel && d.to === sel ? C[1] : sel && d.from === sel ? C[0] : css("--muted") } }));
-    chart("i-graph", "Influence network", "Arrows run from influence to influenced. Node size = documented links. Click an author to trace their lineage.", "w8 h2", {
-      __replace: lastPage !== "influence",
-      tooltip: { ...base().tooltip, trigger: "item", formatter: p => p.dataType === "edge" ? `${esc(p.data.source)} → ${esc(p.data.target)}<br>conceptual ${fmt(p.data.value)}` : `<b>${esc(p.data.name)}</b><br>${FORM_LABEL[p.data.form]}, from ${p.data.year}<br>${p.data.value} documented links` },
-      legend: { top: 0, left: 8, data: FORMS.map(f => FORM_LABEL[f]), textStyle: { color: css("--ink-2"), fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
-      series: [{ type: "graph", layout: "force", roam: true, draggable: true, top: 44, bottom: 10, data: nodes, links, categories: FORMS.map((f, i) => ({ name: FORM_LABEL[f], itemStyle: { color: C[i] } })),
+    const links = docs.map(d => {
+      const pe = pathEdge.has(d.from + ">" + d.to) || pathEdge.has(d.to + ">" + d.from);
+      const ego = sel && (d.from === sel || d.to === sel);
+      return { source: d.from, target: d.to, value: d.conceptual, lineStyle: { opacity: path ? (pe ? 1 : 0.03) : sel ? (ego ? 0.9 : 0.04) : 0.28, width: pe ? 3 : ego ? 2 : 1, color: pe ? C[1] : sel && d.to === sel ? C[1] : sel && d.from === sel ? C[0] : css("--muted") } };
+    });
+    chart("i-graph", "Influence network", "Arrows run from influence to influenced. Tap an author for their ego network; pick two for the chain between them. Pinch or scroll to zoom.", "w8 h2", {
+      __replace: true,
+      tooltip: { ...base().tooltip, trigger: "item", formatter: p => p.dataType === "edge" ? `${esc(p.data.source)} → ${esc(p.data.target)}<br>conceptual ${fmt(p.data.value)}` : `<b>${esc(p.data.name)}</b><br>${FORM_LABEL[p.data.form]}, from ${p.data.year}<br>${p.data.value} documented links<br>community: ${esc(p.data.comm)}` },
+      legend: { top: 0, left: 8, type: "scroll", data: cats.map(c => c.name), textStyle: { color: css("--ink-2"), fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
+      series: [{ type: "graph", layout: "force", roam: ROAM, draggable: true, top: 44, bottom: 10, data: nodes, links, categories: cats,
         edgeSymbol: ["none", "arrow"], edgeSymbolSize: 5, force: { repulsion: 90, edgeLength: [40, 120], gravity: 0.08, friction: 0.2 }, emphasis: { focus: "adjacency", lineStyle: { width: 2 } }, labelLayout: { hideOverlap: true } }],
-    }, p => { if (p.dataType === "node") { S.f.author = S.f.author === p.data.name ? "" : p.data.name; refresh(); } });
-    const body = tile("i-ego", sel || "Most connected", sel ? "Documented influences, ranked by how close the two authors' ideas are (conceptual similarity)." : "Pick an author in the graph or the Author slicer.", "w4 h2", "body");
+    }, p => { if (p.dataType === "node") { const n = p.data.name; if (S.path && S.path[0] && !S.path[1] && n !== S.path[0]) S.path = [S.path[0], n]; else { S.path = null; S.f.author = S.f.author === n ? "" : n; } refresh(); } });
+    controls("i-graph", `<span class="seg">${["form", "community"].map(m => `<button data-c="${m}" class="${(S.infColor || "form") === m ? "on" : ""}">${m === "form" ? "Colour: form" : "Colour: community"}</button>`).join("")}</span>`, el => el.querySelectorAll("[data-c]").forEach(b => (b.onclick = () => { S.infColor = b.dataset.c; refresh(); })));
+    const body = tile("i-ego", path ? "Chain of influence" : sel || "Most connected", path ? `Shortest chain of documented influence links, either direction. Conceptual similarity per link.` : sel ? "Documented influences, ranked by how close the two authors' ideas are (conceptual similarity)." : "Pick an author in the graph or the Author slicer.", "w4 h2", "body");
     const row = (n, val) => `<div class="row" data-a="${esc(n)}"><span>${esc(n)}</span><span class="bar"><i style="width:${Math.max(4, ((val - 0.5) / 0.4) * 100)}%"></i></span><span class="n">${fmt(val, 2)}</span></div>`;
-    if (sel) {
+    const others = A.map(a => a.name).filter(n => n !== (path ? S.path[0] : sel)).sort((a, b) => a.split(" ").pop().localeCompare(b.split(" ").pop()));
+    const pathPicker = (from) => `<label class="pick">Chain to<select id="i-path">${["<option value=\"\">Pick an author…</option>", ...others.map(n => `<option ${S.path && S.path[1] === n ? "selected" : ""}>${esc(n)}</option>`)].join("")}</select></label>`;
+    if (path) {
+      body.innerHTML = pathPicker(S.path[0]) + `<div class="list"><h4>${esc(S.path[0])} to ${esc(S.path[1])}: ${path.edges.length} link${path.edges.length === 1 ? "" : "s"}</h4>${path.edges.map(e => `<div class="row" data-a="${esc(e.to === e.next ? e.to : e.next)}"><span>${esc(e.from)} → ${esc(e.to)}</span><span class="bar"><i style="width:${Math.max(4, ((e.conceptual - 0.5) / 0.4) * 100)}%"></i></span><span class="n">${fmt(e.conceptual, 2)}</span></div>`).join("")}</div><button class="ghost" id="i-path-clear" style="margin-top:8px">Clear chain</button>`;
+    } else if (S.path && S.path[0] && S.path[1]) {
+      body.innerHTML = pathPicker(S.path[0]) + `<p class="note">No chain of documented influences connects ${esc(S.path[0])} and ${esc(S.path[1])} among the authors in view.</p>`;
+    } else if (sel) {
       const into = docs.filter(d => d.to === sel).sort((a, b) => b.conceptual - a.conceptual);
       const out = docs.filter(d => d.from === sel).sort((a, b) => b.conceptual - a.conceptual);
-      body.innerHTML = `<div class="list"><h4>Influenced by (${into.length})</h4>${into.map(d => row(d.from, d.conceptual)).join("") || '<div class="note">None documented in the network.</div>'}<h4>Influenced (${out.length})</h4>${out.map(d => row(d.to, d.conceptual)).join("") || '<div class="note">None documented in the network.</div>'}</div>`;
+      body.innerHTML = pathPicker(sel) + `<div class="list"><h4>Influenced by (${into.length})</h4>${into.map(d => row(d.from, d.conceptual)).join("") || '<div class="note">None documented in the network.</div>'}<h4>Influenced (${out.length})</h4>${out.map(d => row(d.to, d.conceptual)).join("") || '<div class="note">None documented in the network.</div>'}</div>`;
     } else if (S.f.author) {
       body.innerHTML = `<p class="note">${esc(S.f.author)} is not one of the ${A.length} authors in the influence network.</p>`;
     } else {
       const top = Object.entries(deg).sort((a, b) => b[1] - a[1]).slice(0, 15);
       body.innerHTML = `<div class="list">${top.map(([n, k]) => `<div class="row" data-a="${esc(n)}"><span>${esc(n)}</span><span class="bar"><i style="width:${(k / top[0][1]) * 100}%"></i></span><span class="n">${k}</span></div>`).join("")}</div>`;
     }
-    body.querySelectorAll("[data-a]").forEach(r => (r.onclick = () => { S.f.author = r.dataset.a; refresh(); }));
+    body.querySelectorAll("[data-a]").forEach(r => (r.onclick = () => { S.path = null; S.f.author = r.dataset.a; refresh(); }));
+    const ps = body.querySelector("#i-path"); if (ps) ps.onchange = e => { const from = path ? S.path[0] : (S.path && S.path[0]) || sel; S.path = e.target.value ? [from, e.target.value] : null; if (!S.path) S.f.author = from; refresh(); };
+    const pc = body.querySelector("#i-path-clear"); if (pc) pc.onclick = () => { S.f.author = S.path[0]; S.path = null; refresh(); };
     const tests = [["Known pairs", v.known], ["Wikidata pairs", v.wikidata], ["Well-represented authors", v.well_represented]];
     chart("i-valid", "Does influence show in the text?", "z-score of documented pairs against random author pairs. Past the dashed line is significant.", "w6", {
       tooltip: { ...base().tooltip, trigger: "axis", axisPointer: { type: "shadow" }, valueFormatter: v => "z " + fmt(v, 2) },
@@ -372,12 +480,37 @@
     }, p => { S.f.author = p.name; refresh(); });
     const head = document.querySelector("#t-p-nn header"); if (!head.querySelector("[data-m]")) head.querySelector("h3").insertAdjacentHTML("afterend", segHtml); else head.querySelector("span").outerHTML = segHtml;
     head.querySelectorAll("[data-m]").forEach(b => (b.onclick = () => { S.metric = b.dataset.m; refresh(); }));
+    // Similarity graph: an edge for every pair in the top S.top% of the matrix; colour = Louvain
+    // community on the 4-nearest-neighbour graph of the same metric, so clusters read as colours.
+    const allV = []; for (let a = 0; a < N; a++) for (let b = a + 1; b < N; b++) if (M[a][b] != null && inView[a] && inView[b]) allV.push(M[a][b]);
+    allV.sort((x, y) => y - x);
+    const thr = allV[Math.max(0, Math.floor(allV.length * S.top / 100) - 1)] ?? 1;
+    const lab = GR.prose[S.metric];
+    const pE = []; for (let a = 0; a < N; a++) for (let b = a + 1; b < N; b++) if (inView[a] && inView[b] && M[a][b] != null && M[a][b] >= thr) pE.push([a, b, M[a][b]]);
+    const pdeg = {}; pE.forEach(([a, b]) => { pdeg[PR.authors[a]] = (pdeg[PR.authors[a]] || 0) + 1; pdeg[PR.authors[b]] = (pdeg[PR.authors[b]] || 0) + 1; });
+    const fame = {}; INF.documented.forEach(d => { fame[d.from] = (fame[d.from] || 0) + 1; fame[d.to] = (fame[d.to] || 0) + 1; });
+    const pNames = communityNames(lab, PR.authors, fame);
+    const egoP = new Set([i, ...pE.filter(e => e[0] === i || e[1] === i).flatMap(e => [e[0], e[1]])]);
+    const focusSel = !!S.f.author && PR.authors.includes(S.f.author);
+    chart("p-graph", `Who writes like whom: ${S.metric} clusters`, `${pE.length} pairs at similarity ≥ ${fmt(thr)} (the top ${S.top}% of ${allV.length}). Colour = community. Tap a writer to centre the page on them; pinch to zoom.`, "w7 h2", {
+      __replace: true,
+      tooltip: { ...base().tooltip, trigger: "item", formatter: p => p.dataType === "edge" ? `${esc(p.data.source)} ↔ ${esc(p.data.target)}<br>${S.metric} ${fmt(p.data.value)}` : `<b>${esc(p.data.name)}</b><br>${FORM_LABEL[p.data.form]}, from ${p.data.year}<br>${esc(pNames[p.data.category])}<br>${p.data.value} links at this threshold` },
+      legend: { top: 0, left: 8, type: "scroll", data: pNames, textStyle: { color: css("--ink-2"), fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
+      series: [{ type: "graph", layout: "force", roam: ROAM, draggable: true, top: 30, bottom: 6,
+        data: PR.authors.map((a, j) => ({ name: a, value: pdeg[a] || 0, category: lab[j], form: PR.forms[j], year: PR.earliest[j], symbolSize: 7 + Math.sqrt(pdeg[a] || 0) * 3.4,
+          itemStyle: { opacity: !inView[j] ? 0.06 : focusSel ? (egoP.has(j) ? 1 : 0.15) : 0.95, borderColor: j === i && focusSel ? css("--ink") : css("--surface"), borderWidth: j === i && focusSel ? 2.5 : 1 },
+          label: { show: (focusSel && egoP.has(j)) || (!focusSel && (pdeg[a] || 0) >= 5), color: css("--ink"), fontSize: 11 } })),
+        links: pE.map(([a, b, v]) => ({ source: PR.authors[a], target: PR.authors[b], value: v, lineStyle: { width: 0.5 + ((v - thr) / ((allV[0] - thr) || 1)) * 3, color: css("--muted"), opacity: focusSel ? (a === i || b === i ? 0.9 : 0.06) : 0.45 } })),
+        categories: pNames.map((n, k) => ({ name: n, itemStyle: { color: C[k % 8] } })),
+        force: { repulsion: 120, edgeLength: [30, 100], gravity: 0.12, friction: 0.25 }, emphasis: { focus: "adjacency" }, labelLayout: { hideOverlap: true } }],
+    }, p => { if (p.dataType === "node") { S.f.author = p.data.name; refresh(); } });
+    controls("p-graph", `<label>Show top <b>${S.top}%</b> of pairs <input type="range" id="p-top" min="1" max="15" step="1" value="${S.top}" aria-label="Share of most similar pairs to draw"></label>`, c => { const r = c.querySelector("#p-top"); r.oninput = e => { c.querySelector("b").textContent = e.target.value + "%"; }; r.onchange = e => { S.top = +e.target.value; refresh(); }; });
     const order = PR.authors.map((a, j) => j).filter(j => inView[j]).sort((a, b) => PR.earliest[a] - PR.earliest[b]);
     const cells = []; let mx = 0;
     order.forEach((r, yi) => order.forEach((c, xi) => { if (r !== c && M[r][c] != null) cells.push([xi, yi, M[r][c]]); }));
     { const v = cells.map(c => c[2]).sort((a, b) => a - b); mx = v[Math.floor(v.length * 0.98)] || 1; }
     const mn = (() => { const v = cells.map(c => c[2]).sort((a, b) => a - b); return v[Math.floor(v.length * 0.02)] || 0; })();
-    chart("p-heat", `Every pair of writers, ${S.metric}`, "Authors ordered by earliest work. Darker = closer. Click a cell to centre on that row's author.", "w7 h2", {
+    chart("p-heat", `Every pair of writers, ${S.metric}`, "Authors ordered by earliest work. Darker = closer. Click a cell to centre on that row's author.", "w6 h2", {
       __replace: true,
       tooltip: { ...base().tooltip, trigger: "item", formatter: p => `${esc(PR.authors[order[p.data[1]]])} ↔ ${esc(PR.authors[order[p.data[0]]])}<br>${S.metric} ${fmt(p.data[2])}` },
       grid: { left: 8, right: 8, top: 8, bottom: 40 },
@@ -389,7 +522,7 @@
     }, p => { S.f.author = PR.authors[order[p.data[1]]]; refresh(); });
     const ma = P.authors;
     const bc = []; ma.forEach((m, yi) => ma.forEach((t, xi) => bc.push([xi, yi, P.cross_bpc[m][t]])));
-    chart("p-bpc", "Character GPTs reading each other", "Rows: a model trained on one author. Columns: held-out text. Bits per character; lower = more natural to that model.", "w5", {
+    chart("p-bpc", "Character GPTs reading each other", "Rows: a model trained on one author. Columns: held-out text. Bits per character; lower = more natural to that model.", "w6 h2", {
       __replace: true,
       tooltip: { ...base().tooltip, trigger: "item", formatter: p => `${PERSONA[ma[p.data[1]]]} model reading ${PERSONA[ma[p.data[0]]]}: ${fmt(p.data[2])} bits/char` },
       grid: { left: 112, right: 10, top: 10, bottom: 46 },
@@ -400,7 +533,7 @@
     });
     const selP = Object.entries(PERSONA).find(([, n]) => n === S.f.author)?.[0];
     const nModel = P.map.filter(p => p.author.startsWith("model:")).length;
-    chart("p-map", `Stylometric map of ${P.map.length - nModel} works and ${nModel} model samples`, `Burrows Delta on the ${P.n_vocab} most frequent words, projected to two dimensions. Diamonds are text generated by each author's model.`, "w7", {
+    chart("p-map", `Stylometric map of ${P.map.length - nModel} works and ${nModel} model samples`, `Burrows Delta on the ${P.n_vocab} most frequent words, projected to two dimensions. Diamonds are text generated by each author's model.`, "w12", {
       tooltip: { ...base().tooltip, trigger: "item", formatter: p => `<b>${esc(p.data.label)}</b><br>${p.data.model ? "generated by the " + esc(p.data.author.replace("model:", "")) + " model" : PERSONA[p.data.author]}` },
       legend: { top: 0, right: 8, textStyle: { color: css("--ink-2"), fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
       grid: { left: 30, right: 16, top: 28, bottom: 24 },
@@ -414,6 +547,52 @@
     $("#foot").innerHTML = `Writer-to-writer similarity: the ${N}-author TF-IDF and embedding matrices from literature-mutations (successor to the 2020 Prose Similarities graph). Character GPTs: persona-transformers, ${Object.keys(P.val_loss).length} models of ${(P.params / 1e6).toFixed(1)}M parameters, each trained from scratch on one author's text. McCarthy texts are not redistributed; only derived measurements appear here.`;
   }
 
+  // ------------------------------------------------------------------ page: atlas
+  // One node model: genres, authors, works and the influences between authors. Works join in
+  // once the slicers narrow the view to a readable number of them.
+  function pageAtlas() {
+    const C = SER();
+    const set = filterWorks(S.f, { ignoreWork: true });
+    const narrowed = !!(S.f.author || S.f.genre || S.f.from || S.f.to);
+    const showWorks = set.length <= 80;
+    const inf = new Map(INF.authors.map(a => [a.name, a]));
+    const authors = new Map();
+    set.forEach(w => { const a = authors.get(w.author) || { name: w.author, works: [], genres: {} }; a.works.push(w); if (w.genre != null) a.genres[w.genre] = (a.genres[w.genre] || 0) + 1; authors.set(w.author, a); });
+    const docs = INF.documented.filter(d => !narrowed || authors.has(d.from) || authors.has(d.to) || d.from === S.f.author || d.to === S.f.author);
+    docs.forEach(d => { for (const n of [d.from, d.to]) if (!authors.has(n)) authors.set(n, { name: n, works: [], genres: {}, onlyInfluence: true }); });
+    const nodes = [], links = [];
+    const genresIn = new Set(set.map(w => w.genre).filter(g => g != null));
+    G.genres.forEach((g, i) => { if (!narrowed || genresIn.has(i)) nodes.push({ id: "g" + i, name: g.name, kind: "Genre", category: 0, symbol: "roundRect", z: 10, labelLayout: { hideOverlap: false }, symbolSize: [Math.min(140, 30 + g.name.length * 5), 20], itemStyle: { color: C[0], borderRadius: 4 }, label: { show: true, color: "#fff", fontSize: 10.5, fontWeight: 600 }, info: `${g.size} novels, forms ${g.birth_year}` }); });
+    for (const a of authors.values()) {
+      const me = S.f.author === a.name;
+      nodes.push({ id: "a:" + a.name, name: a.name, kind: "Author", category: a.onlyInfluence ? 2 : 1, symbolSize: me ? 16 : 5 + Math.sqrt(a.works.length || 1) * 3, info: a.onlyInfluence ? (inf.has(a.name) ? `${FORM_LABEL[inf.get(a.name).form]}, from ${inf.get(a.name).earliest_year}` : "") : `${a.works.length} novel${a.works.length > 1 ? "s" : ""} in view`,
+        itemStyle: { borderColor: me ? css("--ink") : css("--surface"), borderWidth: me ? 2.5 : 0.8 }, label: { show: me || a.works.length >= (narrowed ? 2 : 7) || (narrowed && authors.size < 40), color: css("--ink"), fontSize: 10.5 } });
+      Object.entries(a.genres).forEach(([gi, k]) => links.push({ source: "a:" + a.name, target: "g" + gi, value: `${k} novel${k > 1 ? "s" : ""}`, lineStyle: { color: C[0], opacity: 0.3, width: Math.min(3, 0.5 + k * 0.4) } }));
+      if (showWorks) a.works.forEach(w => { nodes.push({ id: "w" + w.id, name: w.title, kind: "Work", category: 3, symbolSize: 5, info: `${w.year}${w.arc ? ", " + w.arc.shape.toLowerCase() + " arc" : ""}`, label: { show: set.length <= 25, color: css("--ink-2"), fontSize: 10 } }); links.push({ source: "w" + w.id, target: "a:" + w.author, value: "wrote", lineStyle: { color: C[3], opacity: 0.4 } }); });
+    }
+    docs.forEach(d => links.push({ source: "a:" + d.from, target: "a:" + d.to, value: `influence, conceptual ${fmt(d.conceptual, 2)}`, lineStyle: { color: C[1], opacity: 0.45, width: 1.2, curveness: 0.15 } }));
+    kpis([
+      { v: nodes.length, l: "Nodes in view", s: showWorks ? "Genres, authors and works" : `Works join below 80; ${set.length} now` },
+      { v: links.length, l: "Links in view", s: "Wrote, belongs to, influenced" },
+      { v: [...authors.values()].filter(a => !a.onlyInfluence).length, l: "Novelists in view", s: `${[...authors.values()].filter(a => a.onlyInfluence).length} more reached only by influence` },
+      { v: docs.length, l: "Influence links in view", s: "Documented, either direction" },
+    ]);
+    const aBox = tile("a-graph", "", "", "w12 h2"); aBox.style.minHeight = aBox.clientWidth < 600 ? "460px" : "560px";
+    const cats = ["Genre", "Novelist", "Influence-only author", "Work"].map((n, k) => ({ name: n, itemStyle: { color: [C[0], C[2], C[1], C[3]][k] } }));
+    chart("a-graph", "Atlas: every entity, one model", `Genres, the novelists in them, the writers who influenced them${showWorks ? ", and each novel" : ""}. Filter with the slicers; tap a node to focus it. Pinch to zoom.`, "w12 h2", {
+      __replace: true,
+      tooltip: { ...base().tooltip, trigger: "item", formatter: p => p.dataType === "edge" ? esc(p.data.value) : `<b>${esc(p.data.name)}</b><br>${p.data.kind}${p.data.info ? "<br>" + esc(p.data.info) : ""}` },
+      legend: { top: 0, left: 8, data: cats.map(c => c.name), textStyle: { color: css("--ink-2"), fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
+      series: [{ type: "graph", layout: "force", roam: ROAM, top: 30, bottom: 6, data: nodes, links, categories: cats, edgeSymbol: ["none", "none"],
+        force: { repulsion: nodes.length < 70 ? 320 : narrowed ? 110 : 28, edgeLength: nodes.length < 70 ? [50, 120] : narrowed ? [30, 90] : [14, 50], gravity: 0.1, friction: 0.25 }, emphasis: { focus: "adjacency" }, labelLayout: { hideOverlap: true } }],
+    }, p => { if (p.dataType !== "node") return; const d = p.data;
+      if (d.kind === "Genre") S.f.genre = S.f.genre === d.name ? "" : d.name;
+      else if (d.kind === "Author") S.f.author = S.f.author === d.name ? "" : d.name;
+      else { S.f.work = d.name; S.page = "sentiment"; render(); return; }
+      refresh(); });
+    $("#foot").innerHTML = `Joins the corpus of ${works.length} novels to the ${INF.authors.length}-author influence network. Tapping a novel opens its sentiment arc.`;
+  }
+
   // ------------------------------------------------------------------ render loop
   function render(force) {
     if (force || lastPage !== S.page) {
@@ -422,18 +601,23 @@
     }
     rail.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.p === S.page));
     syncSlicers();
-    ({ sentiment: pageSentiment, genres: pageGenres, influence: pageInfluence, prose: pageProse })[S.page]();
+    ({ sentiment: pageSentiment, genres: pageGenres, influence: pageInfluence, prose: pageProse, atlas: pageAtlas })[S.page]();
     lastPage = S.page;
   }
   function refresh() { render(false); }
-  function go(p) { if (S.focus) focus(S.focus); S.page = p; S.shape = ""; S.lit = null; S.hl = []; stopStory(); render(); }
+  function go(p) { if (S.focus) focus(S.focus); S.page = p; S.shape = ""; S.lit = null; S.hl = []; if (p !== "influence") S.path = null; stopStory(); render(); }
 
   // ------------------------------------------------------------------ stories
   const scoredWorks = () => works.filter(w => w.arc);
   const byTitle = t => works.find(w => w.title === t && w.arc);
+  const arcNeighbours = title => { const i = SEN.arcs.findIndex(a => works[a.work].title === title); return GR.arc.edges.filter(e => e[0] === i || e[1] === i).sort((a, b) => b[2] - a[2]).map(e => [works[SEN.arcs[e[0] === i ? e[1] : e[0]].work], e[2]]); };
+  const pathText = (a, b) => { const p = findPath(a, b, INF.documented); return p ? p.nodes.join(" → ") + ` (${p.edges.length} links)` : "no chain"; };
+  const commOf = (lab, name) => { const i = PR.authors.indexOf(name), k = lab[i]; return PR.authors.map((a, j) => [a, j]).filter(([a, j]) => lab[j] === k && j !== i).sort((x, y) => (PR.stylistic[i][y[1]] || 0) - (PR.stylistic[i][x[1]] || 0)).map(x => x[0]); };
   const STORIES = {
     sentiment: [
       { f: {}, lit: "s-arc", t: () => { const s = scoredWorks(); const l = s.filter(w => w.arc.end < w.arc.start).length; return `Across ${s.length} novels, the average arc drifts down: ${pct(l / s.length)} end lower than they begin.`; } },
+      { f: {}, lit: "s-graph", t: () => `Link each novel to the ${GR.arc.k} whose arcs move most like it and families appear: ${pct(GR.arc.same_shape_neighbours)} of neighbours share a shape, against ${pct(GR.arc.same_shape_chance)} by chance.` },
+      { f: { work: "Moby-Dick" }, lit: "s-graph", t: () => { const n = arcNeighbours("Moby-Dick"); return `Moby-Dick's arc moves most like ${n.slice(0, 3).map(([w, r]) => `${w.title} (r ${fmt(r, 2)})`).join(", ")}.`; } },
       { f: { work: "This Side of Paradise" }, lit: "s-arc", t: () => { const w = byTitle("This Side of Paradise"); return `The 2019 experiment scored this novel paragraph by paragraph and got noise (grey). Scored in 1% windows and smoothed (orange), it reads: ${fmt(w.arc.start)} at the start, ${fmt(w.arc.end)} at the end, ${w.arc.shape.toLowerCase()} by thirds.`; } },
       { f: { work: "This Side of Paradise" }, lit: "s-mom", t: () => { const w = byTitle("This Side of Paradise"); const m = w.arc.momentum; const k = m.indexOf(Math.min(...m)); return `Momentum is the slope. Its steepest drop comes ${k}% of the way through (${fmt(m[k], 2)}); the sharpest turn overall is at ${w.arc.turn}%.`; } },
       { f: { genre: "Detective fiction" }, lit: "s-scatter", t: () => { const s = filterWorks({ genre: "Detective fiction" }).filter(w => w.arc); const l = s.filter(w => w.arc.end < w.arc.start).length; return `Detective fiction: ${s.length} scored novels, and ${pct(l / s.length)} end darker than they start. Points under the diagonal end lower.`; } },
@@ -444,17 +628,27 @@
       { f: {}, lit: "g-null", t: () => `Do genres mutate at a rate? ${G.null_model.real_total} mutation events in the real corpus; ${G.null_model.shuffled_mean} on average with the dates shuffled (z ${G.null_model.z}). No.` },
       { f: {}, lit: "g-density", t: () => `What looks like acceleration is this: more books survive from later decades. Per book, the rate is flat at ${Object.values(G.per_book_rate_by_era).join(", ")} across four eras.` },
       { f: { genre: "Detective fiction" }, lit: "g-bands", t: () => { const g = G.genres.find(x => x.name === "Detective fiction"); const e = G.controls.emergent[0]; return `One genre is real in time: detective fiction forms in ${g.birth_year} and its core sits in ${e.year_min}–${e.year_max}, concentration z ${e.concentration_z}. Its words: ${g.top_terms.slice(0, 5).join(", ")}.`; } },
+      { f: { author: "Herman Melville" }, lit: "g-graph", t: () => { const by = {}; works.forEach(w => { if (w.genre != null) (by[w.author] = by[w.author] || new Set()).add(w.genre); }); const multi = Object.values(by).filter(x => x.size > 1).length; return `${multi} of ${Object.keys(by).length} novelists write in more than one genre. Melville spans ${by["Herman Melville"].size}: ${[...by["Herman Melville"]].map(g => G.genres[g].name).join(", ")}.`; } },
       { f: {}, hl: ["Detective fiction"], lit: "g-clock", t: () => { const c = G.clock.communities.find(x => x.key === "detective"); const g = G.genres.find(x => x.name === "Detective fiction"); return `The name and the books arrive together: the prose cluster forms in ${g.birth_year}; "detective story" and its kin reach 10% of their mentions by ${c.takeoff_10pct} and half by ${c.mass_median}.`; } },
       { f: { from: "1850" }, hl: ["Gothic / sensation fiction"], lit: "g-clock", t: () => { const c = G.clock.communities.find(x => x.key === "gothic"); const Y = G.clock.years, i0 = Y.indexOf(1850); const seg = c.series.slice(i0); const pk = seg.indexOf(Math.max(...seg)); return `Gothic after 1850: ${fmt(c.series[i0], 1)} mentions per billion words in 1850, peaking at ${fmt(seg[pk], 1)} in ${Y[i0 + pk]}, then ${fmt(c.series[c.series.length - 1], 1)} by ${Y[Y.length - 1]}.`; } },
     ],
     influence: [
       { f: {}, lit: "i-graph", t: () => `${INF.authors.length} authors, ${INF.documented.length} documented influences between them. Size is how many arrows touch a writer.` },
       { f: { author: "Herman Melville" }, lit: "i-ego", t: () => { const into = INF.documented.filter(d => d.to === "Herman Melville").sort((a, b) => b.conceptual - a.conceptual); return `Melville's lineage: ${into.map(d => d.from.split(" ").pop()).join(", ")}. Closest in ideas: ${into[0].from} at ${fmt(into[0].conceptual, 2)}.`; } },
+      { f: {}, path: ["Plato", "Arthur Conan Doyle"], lit: "i-graph", t: () => `From Plato to Conan Doyle in documented influence: ${pathText("Plato", "Arthur Conan Doyle")}.` },
+      { f: {}, infColor: "community", lit: "i-graph", t: () => `Coloured by community instead of form, the network splits into ${new Set(GR.influence.community).size} circles (modularity ${GR.influence.modularity}). Philosophers and novelists mix inside them.` },
       { f: {}, lit: "i-valid", t: () => `Do documented influences leave a trace in the text? In ideas, strongly (z ${fmt(INF.validation.known.conceptual.z, 1)}). In prose style, barely (z ${fmt(INF.validation.known.stylistic.z, 1)}). Influence shows up in ideas far more than in style.` },
       { f: {}, lit: "i-pairs", t: () => `Every documented pair on one plot: mean conceptual similarity ${fmt(INF.validation.known.conceptual.real_mean, 2)}, mean stylistic ${fmt(INF.validation.known.stylistic.real_mean, 2)}.` },
     ],
+    atlas: [
+      { f: {}, lit: "a-graph", t: () => `${works.length} novels, ${new Set(works.map(w => w.author)).size} novelists, ${G.genres.length} genres and ${INF.documented.length} influence links in one model.` },
+      { f: { author: "Herman Melville" }, lit: "a-graph", t: () => { const ws = works.filter(w => w.author === "Herman Melville"); return `Melville: ${ws.length} novels, ${new Set(ws.map(w => w.genre)).size} genres, ${INF.documented.filter(d => d.from === "Herman Melville" || d.to === "Herman Melville").length} influence links. Tap any novel to open its arc.`; } },
+      { f: { genre: "Detective fiction" }, lit: "a-graph", t: () => { const ws = works.filter(w => genreName(w.genre) === "Detective fiction"); return `Detective fiction: ${ws.length} novels by ${new Set(ws.map(w => w.author)).size} authors, with the writers who shaped them.`; } },
+    ],
     prose: [
       { f: { author: "Herman Melville" }, lit: "p-nn", t: () => { const i = PR.authors.indexOf("Herman Melville"); const nn = PR.stylistic[i].map((v, j) => [PR.authors[j], v]).filter(x => x[0] !== "Herman Melville" && x[1] != null).sort((a, b) => b[1] - a[1]); return `By distinctive vocabulary, Melville's nearest writer is ${nn[0][0]} (${fmt(nn[0][1])}), then ${nn[1][0]} and ${nn[2][0]}.`; } },
+      { f: {}, lit: "p-graph", t: () => `Draw only the closest ${S.top}% of pairs and ${new Set(GR.prose.stylistic).size} prose communities appear. The philosophers find each other: Kant's closest in his community are ${commOf(GR.prose.stylistic, "Immanuel Kant").slice(0, 5).map(a => a.split(" ").pop()).join(", ")}.` },
+      { f: { author: "Herman Melville" }, lit: "p-graph", t: () => `Melville's prose circle, closest first: ${commOf(GR.prose.stylistic, "Herman Melville").slice(0, 6).map(a => a.split(" ").pop()).join(", ")}.` },
       { f: {}, lit: "p-bpc", t: () => `Train a small GPT on one author and make it read another. McCarthy's model reads McCarthy at ${fmt(PR.persona.cross_bpc.mccarthy.mccarthy, 2)} bits/char and Shakespeare at ${fmt(PR.persona.cross_bpc.mccarthy.shakespeare, 2)}: the farthest pair.` },
       { f: {}, lit: "p-bpc", t: () => `Melville sits between them: his model reads Shakespeare at ${fmt(PR.persona.cross_bpc.melville.shakespeare, 2)}, closer than it reads McCarthy (${fmt(PR.persona.cross_bpc.melville.mccarthy, 2)}).` },
       { f: { author: "Cormac McCarthy" }, lit: "p-map", t: () => `On the stylometric map, each model's generated text lands among its author's books. McCarthy's sample is nearest to "${PR.persona.nearest_book["model:mccarthy"].split(": ")[1]}".` },
@@ -464,7 +658,7 @@
   let story = null;
   function showStep() {
     const steps = STORIES[S.page]; const st = steps[story];
-    S.f = { author: "", work: "", genre: "", from: "", to: "", ...st.f }; S.hl = st.hl || []; S.shape = ""; S.lit = st.lit;
+    S.f = { author: "", work: "", genre: "", from: "", to: "", ...st.f }; S.hl = st.hl || []; S.shape = ""; S.lit = st.lit; S.path = st.path || null; S.cohort = st.cohort || null; S.infColor = st.infColor || "form";
     refresh();
     $("#story-step").textContent = `Story · ${PAGES.find(p => p.id === S.page).name}`;
     $("#story-text").textContent = st.t();
@@ -480,9 +674,13 @@
   $("#story-close").onclick = stopStory;
 
   // ------------------------------------------------------------------ ask
-  const EXAMPLES = ["How did Gothic fiction's name change after 1850?", "Who influenced Herman Melville?", "Whose prose is closest to Melville?", "Do detective novels end darker than they begin?"];
+  // Chips: one scrollable row on a phone; on desktop the first four, then "More". The order rotates
+  // daily so a returning visitor sees different questions first.
   const chips = $("#chips");
-  EXAMPLES.forEach(q => { const b = el("button", "", esc(q)); b.onclick = () => { $("#askq").value = q; ask(q); }; chips.append(b); });
+  const rot = Math.floor(Date.now() / 864e5) % CHIPS.length;
+  const order = [...CHIPS.slice(rot), ...CHIPS.slice(0, rot)];
+  order.forEach((c, k) => { const b = el("button", k >= 4 ? "extra" : "", esc(c.q)); b.onclick = () => { $("#askq").value = c.q; ask(c.q); }; chips.append(b); });
+  const more = el("button", "more", `More questions (${order.length - 4})`); more.onclick = () => { chips.classList.toggle("open"); more.textContent = chips.classList.contains("open") ? "Fewer" : `More questions (${order.length - 4})`; }; chips.append(more);
   function clean(spec) {
     const ok = (v, list) => (v && list.includes(v) ? v : "");
     const f = spec.filters || {};
@@ -492,11 +690,16 @@
       filters: { author: ok(f.author, authorsAll), work: ok(f.work, works.map(w => w.title)), genre: ok(f.genre, G.genres.map(g => g.name)), from: dec(f.from), to: dec(f.to) },
       highlight: (spec.highlight || []).filter(h => authorsAll.includes(h) || G.clock.communities.some(c => c.name === h) || G.genres.some(g => g.name === h)),
       answer: spec.answer || "", source: spec.source || "local",
+      path: Array.isArray(spec.path) && spec.path.length === 2 && spec.path.every(a => INF.authors.some(x => x.name === a)) && spec.path[0] !== spec.path[1] ? spec.path : null,
+      cohort: spec.cohort && INF.authors.some(x => x.name === spec.cohort.author) && ["heirs", "influences"].includes(spec.cohort.rel) ? { rel: spec.cohort.rel, author: spec.cohort.author } : null,
+      color: spec.color === "community" ? "community" : null,
+      top: Number.isInteger(spec.top) && spec.top >= 1 && spec.top <= 15 ? spec.top : null,
     };
   }
   function apply(spec) {
     stopStory();
     S.page = spec.page; S.f = { ...spec.filters }; S.hl = spec.highlight; S.shape = ""; S.lit = spec.focus;
+    S.path = spec.path; S.cohort = spec.cohort; S.infColor = spec.color || "form"; if (spec.top) S.top = spec.top;
     render(lastPage !== S.page);
     const read = QA.readout(spec, D);
     const a = $("#answer"); a.hidden = false;

@@ -8,7 +8,7 @@
  * Spec: {page, focus, filters:{author,work,genre,from,to}, highlight:[], answer}
  */
 (function () {
-  const PAGES = ["sentiment", "genres", "influence", "prose"];
+  const PAGES = ["sentiment", "genres", "influence", "prose", "atlas"];
   const GENRE_WORDS = {
     detective: ["detective", "mystery", "crime", "sherlock", "holmes", "police"],
     gothic: ["gothic", "sensation", "ghost", "horror"],
@@ -29,14 +29,29 @@
     for (const a of D.authorsAll) {
       const n = norm(a);
       if (qq.includes(" " + n + " ") && n.length > bestLen) { best = a; bestLen = n.length; continue; }
-      const parts = n.split(/\s+/).filter(p => p.length > 3 && !["john", "william", "thomas", "henry", "charles", "george", "robert", "james", "mary", "lord", "the", "great"].includes(p));
-      const last = parts[parts.length - 1];
+      const toks = n.split(/\s+/); const last = toks.length > 1 && toks[toks.length - 1].length > 2 && !["the", "great"].includes(toks[toks.length - 1]) ? toks[toks.length - 1] : null;
       if (last && qq.includes(" " + last + " ") && last.length > bestLen) {
         // prefer authors with more data behind them when a surname is shared
         best = a; bestLen = last.length;
       }
     }
     return best;
+  }
+
+  // Every author named in the question, in the order they appear ("from Plato to Doyle").
+  function findAuthors(q, D) {
+    const qq = " " + norm(q).replace(/[^a-z\s'-]/g, " ") + " ";
+    const STOP = ["john", "william", "thomas", "henry", "charles", "george", "robert", "james", "mary", "lord", "the", "great"];
+    const hits = [];
+    for (const a of D.authorsAll) {
+      const n = norm(a);
+      let at = qq.indexOf(" " + n + " ");
+      if (at < 0) { const toks = n.split(/\s+/); const last = toks.length > 1 && toks[toks.length - 1].length > 2 && !STOP.includes(toks[toks.length - 1]) ? toks[toks.length - 1] : null; if (last) at = qq.indexOf(" " + last + " "); }
+      if (at >= 0) hits.push([at, a, D.influence.authors.some(x => x.name === a) ? 1 : 0]);
+    }
+    hits.sort((x, y) => x[0] - y[0] || y[2] - x[2]);
+    const out = []; for (const [at, a] of hits) if (!out.some(([b]) => Math.abs(b - at) < 3)) out.push([at, a]);
+    return out.map(x => x[1]);
   }
 
   function findWork(q, D) {
@@ -85,8 +100,21 @@
     const clock = findClock(q, D);
     const genre = findGenre(q, D);
     const y = years(q);
-    let page = "genres", focus = "g-bands";
-    if (/influenc|inspired|mentor|disciple|admired|read by|lineage|descend/.test(qq)) { page = "influence"; focus = "i-ego"; }
+    const named = findAuthors(q, D);
+    let page = "genres", focus = "g-bands", path = null, cohort = null, color = null;
+    const darkQ = /dark|end|sentiment|mood|happ|sad|bleak|grim|tone/.test(qq);
+    if (/atlas|everything|every entity|one graph|whole map/.test(qq)) { page = "atlas"; focus = "a-graph"; }
+    else if (named.length >= 2 && /path|chain|connect|link|get from|route|between|lead to|to get/.test(qq)) { page = "influence"; focus = "i-graph"; path = [named[0], named[1]]; }
+    else if (author && darkQ && /influenc|heirs|disciples|followers|inspired/.test(qq)) {
+      page = "sentiment"; focus = "s-scatter";
+      const heirs = new RegExp("(writers|authors|those|who|ones)\\s+(that\\s+)?" + norm(author).split(" ").pop() + "\\s+influenc|influenced by|heirs|disciples|followers|inspired by").test(qq);
+      cohort = { rel: heirs ? "heirs" : "influences", author };
+    }
+    else if (/communit|circle|clique|cluster|group|famil|camp/.test(qq) && /influenc/.test(qq)) { page = "influence"; focus = "i-graph"; color = "community"; }
+    else if (/cluster|communit|circle|clique|group|famil|camp/.test(qq) && /prose|style|writ|sound/.test(qq)) { page = "prose"; focus = "p-graph"; }
+    else if (/famil|cluster|similar arc|arcs? like|move like|same shape|shaped like|kin/.test(qq) && (work || /arc|shape|novel/.test(qq))) { page = "sentiment"; focus = "s-graph"; }
+    else if (/cross|bridge|more than one genre|several genres|multiple genres|span|which genres did|genres did/.test(qq)) { page = "genres"; focus = "g-graph"; }
+    else if (/influenc|inspired|mentor|disciple|admired|read by|lineage|descend/.test(qq)) { page = "influence"; focus = "i-ego"; }
     else if (/prose|style|stylist|writes like|write like|closest|similar|resembl|sound like|voice|predictab|perplex|transformer|gpt/.test(qq)) { page = "prose"; focus = /predictab|perplex|transformer|gpt|model/.test(qq) ? "p-bpc" : "p-nn"; }
     else if (/sentiment|mood|arc|dark|happ|sad|emotion|end |ending|ends|momentum|turn|feel|tone|positive|negative|shape/.test(qq) || work) { page = "sentiment"; focus = work ? "s-arc" : "s-shape"; }
     else if (clock && /name|word|called|term|label|ngram|rise|mutat|after|since|before|change|grow|evolv/.test(qq)) { page = "genres"; focus = "g-clock"; }
@@ -94,12 +122,14 @@
     else if (/null|random|shuffl|rate|acceler/.test(qq)) { page = "genres"; focus = "g-null"; }
     else if (author && !genre) { page = "prose"; focus = "p-nn"; }
     const spec = {
-      page, focus, source: "local",
+      page, focus, source: "local", path, cohort, color,
       filters: { author: author || null, work: work ? work.title : null, genre: page === "genres" && focus === "g-clock" ? null : genre, from: y.from, to: y.to },
       highlight: clock ? [clock.name] : [],
       answer: "",
     };
     if (page === "prose" || page === "influence") spec.filters.genre = null;
+    if (path || cohort) spec.filters.author = null;
+    if (focus === "g-graph" && !author) spec.filters.author = null;
     return spec;
   }
 
@@ -108,6 +138,57 @@
 
   function readout(spec, D) {
     const f = spec.filters || {};
+    if (spec.path && spec.path[0] && spec.path[1]) {
+      const p = D.findPath(spec.path[0], spec.path[1]);
+      return p ? `${p.nodes.join(" → ")}: ${p.edges.length} documented link${p.edges.length > 1 ? "s" : ""}.` : `No chain of documented influences joins ${spec.path[0]} and ${spec.path[1]}.`;
+    }
+    if (spec.cohort) {
+      const set = D.cohortWorks(spec.cohort).filter(w => w.arc);
+      const all = D.works.filter(w => w.arc);
+      const lowAll = all.filter(w => w.arc.end < w.arc.start).length / all.length;
+      if (!set.length) return `None of the writers ${spec.cohort.rel === "heirs" ? `${spec.cohort.author} influenced` : `who influenced ${spec.cohort.author}`} have novels in the sentiment corpus.`;
+      const low = set.filter(w => w.arc.end < w.arc.start).length;
+      return `${set.length} novels by ${new Set(set.map(w => w.author)).size} writers ${spec.cohort.rel === "heirs" ? `${spec.cohort.author} influenced` : `who influenced ${spec.cohort.author}`} (${[...new Set(set.map(w => w.author))].join(", ")}): ${pct(low / set.length)} end lower than they begin, against ${pct(lowAll)} of all ${all.length}.`;
+    }
+    if (spec.focus === "a-graph") {
+      const set = D.filterWorks(f);
+      return `${set.length} novels by ${new Set(set.map(w => w.author)).size} novelists across ${(n => n + (n === 1 ? " genre" : " genres"))(new Set(set.map(w => w.genre).filter(g => g != null)).size)}, with ${D.influence.documented.length} influence links in the full model.`;
+    }
+    if (spec.focus === "i-graph" && spec.color === "community") {
+      const lab = D.graphs.influence.community; const k = new Set(lab).size;
+      const deg = {}; D.influence.documented.forEach(d => { deg[d.from] = (deg[d.from] || 0) + 1; deg[d.to] = (deg[d.to] || 0) + 1; });
+      const groups = [...Array(k).keys()].map(c => D.influence.authors.filter((a, i) => lab[i] === c).sort((a, b) => (deg[b.name] || 0) - (deg[a.name] || 0)).map(a => a.name.split(" ").pop()));
+      return `${k} communities (modularity ${D.graphs.influence.modularity}): ` + groups.map(g => g.slice(0, 4).join(", ")).join(" | ") + ".";
+    }
+    if (spec.focus === "s-graph") {
+      const A = D.graphs.arc;
+      if (f.work) {
+        const i = D.sentiment.arcs.findIndex(a => D.works[a.work].title === f.work);
+        if (i >= 0) { const nb = A.edges.filter(e => e[0] === i || e[1] === i).sort((a, b) => b[2] - a[2]).slice(0, 4).map(e => { const w = D.works[D.sentiment.arcs[e[0] === i ? e[1] : e[0]].work]; return `${w.title} (r ${fmt(e[2], 2)})`; });
+          return `${f.work} has a ${D.sentiment.arcs[i].shape.toLowerCase()} arc; it moves most like ${nb.join(", ")}.`; }
+      }
+      return `Each novel is linked to the ${A.k} whose arcs move most like it: ${pct(A.same_shape_neighbours)} of those neighbours share its shape, against ${pct(A.same_shape_chance)} by chance.`;
+    }
+    if (spec.focus === "g-graph") {
+      const by = {}; D.filterWorks(f).forEach(w => { if (w.genre != null) (by[w.author] = by[w.author] || new Set()).add(w.genre); });
+      if (f.author && by[f.author]) return `${f.author} writes in ${by[f.author].size} genre${by[f.author].size > 1 ? "s" : ""}: ${[...by[f.author]].map(g => D.genres.genres[g].name).join(", ")}.`;
+      const multi = Object.entries(by).filter(([, g]) => g.size > 1).sort((a, b) => b[1].size - a[1].size);
+      return `${multi.length} of ${Object.keys(by).length} novelists write in more than one genre. Widest: ${multi.slice(0, 4).map(([a, g]) => `${a} (${g.size})`).join(", ")}.`;
+    }
+    if (spec.focus === "p-bpc") {
+      const P = D.prose.persona, M = P.authors, NM = { mccarthy: "McCarthy", melville: "Melville", shakespeare: "Shakespeare" };
+      const t = f.author && M.find(m => f.author.toLowerCase().includes(m));
+      if (t) { const rows = M.filter(m => m !== t).map(m => [m, P.cross_bpc[m][t]]).sort((a, b) => b[1] - a[1]);
+        return `${NM[rows[0][0]]}'s model finds ${NM[t]} hardest: ${fmt(rows[0][1], 2)} bits per character, against ${fmt(rows[1][1], 2)} for ${NM[rows[1][0]]}'s and ${fmt(P.cross_bpc[t][t], 2)} for ${NM[t]}'s own.`; }
+      return `Each model reads its own author best: McCarthy ${fmt(P.cross_bpc.mccarthy.mccarthy, 2)}, Melville ${fmt(P.cross_bpc.melville.melville, 2)}, Shakespeare ${fmt(P.cross_bpc.shakespeare.shakespeare, 2)} bits per character. The farthest pair is McCarthy's model reading Shakespeare (${fmt(P.cross_bpc.mccarthy.shakespeare, 2)}).`;
+    }
+    if (spec.focus === "p-graph") {
+      const lab = D.graphs.prose.stylistic; const a = f.author; const i = D.prose.authors.indexOf(a);
+      if (i >= 0) { const mates = D.prose.authors.filter((x, j) => lab[j] === lab[i] && x !== a); return `${a}'s prose community (${mates.length + 1} writers): ${mates.slice(0, 8).join(", ")}.`; }
+      const k = new Set(lab).size;
+      const deg = {}; D.influence.documented.forEach(d => { deg[d.from] = (deg[d.from] || 0) + 1; deg[d.to] = (deg[d.to] || 0) + 1; });
+      return `${k} prose communities (modularity ${D.graphs.prose.modularity.stylistic}): ` + [...Array(k).keys()].map(c => D.prose.authors.filter((x, j) => lab[j] === c).sort((a, b) => (deg[b] || 0) - (deg[a] || 0)).slice(0, 4).map(x => x.split(" ").pop()).join(", ")).join(" | ") + ".";
+    }
     if (spec.page === "influence") {
       const a = f.author;
       if (!a) return `Influence network: ${D.influence.authors.length} authors, ${D.influence.documented.length} documented influence pairs.`;

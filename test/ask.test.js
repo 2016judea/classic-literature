@@ -17,3 +17,12 @@ test("a sentence with a number not in the data is removed", () => {
   assert.strictEqual(v.answer, "There were 88 mutation events.");
   assert.strictEqual(v.dropped, 1);
 });
+
+test("path and cohort only accept authors in the influence network", () => {
+  const v = validate({ page: "influence", focus: "i-graph", filters: {}, highlight: [], answer: "", path: ["Plato", "Arthur Conan Doyle"], cohort: { rel: "heirs", author: "Nobody" }, color: "community", top: 40 });
+  assert.deepStrictEqual(v.path, ["Plato", "Arthur Conan Doyle"]);
+  assert.strictEqual(v.cohort, null);
+  assert.strictEqual(v.color, "community");
+  assert.strictEqual(v.top, null);
+  assert.strictEqual(validate({ page: "atlas", focus: "a-graph", filters: {}, highlight: [], answer: "" }).focus, "a-graph");
+});

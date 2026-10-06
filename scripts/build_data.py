@@ -288,7 +288,60 @@ lines.append(f'\nCHARACTER GPTs (one model per author; best validation loss nats
 ctx = {"context": "\n".join(lines),
        "authors": authorsAll if (authorsAll := sorted({w["author"] for w in works} | set(names) | {"Cormac McCarthy"})) else [],
        "works": sorted({w["title"] for w in works}), "genres": [g["name"] for g in genres],
-       "clock": [c["name"] for c in clock]}
+       "clock": [c["name"] for c in clock], "network": names}
 (ROOT / "api").mkdir(exist_ok=True)
 (ROOT / "api/_context.json").write_text(json.dumps(ctx, ensure_ascii=False))
 print("api/_context.json", round(len(ctx["context"]) / 1024, 1), "KB of context")
+
+# ---------------------------------------------------------------- graphs.json
+# Relational structure for the node-link views. Communities are Louvain (seed 42) so a colour
+# means the same group on every load; the page draws edges and thresholds live from the matrices.
+import numpy as np, networkx as nx
+from collections import Counter
+
+def louvain(edges, n):
+    G = nx.Graph(); G.add_nodes_from(range(n))
+    for a, b, w in edges: G.add_edge(a, b, weight=w)
+    com = sorted(nx.community.louvain_communities(G, weight="weight", seed=42), key=len, reverse=True)
+    lab = [0] * n
+    for k, c in enumerate(com):
+        for i in c: lab[i] = k
+    return lab, nx.community.modularity(G, com, weight="weight")
+
+# 1. Novels linked by arc shape: Pearson r of the z-scored smoothed arcs, 5 nearest each.
+K_ARC = 5
+X = np.array([a["smooth"] for a in arcs], dtype=float)
+X = (X - X.mean(1, keepdims=True)) / X.std(1, keepdims=True)
+Cr = X @ X.T / X.shape[1]; np.fill_diagonal(Cr, -9)
+nn = np.argsort(-Cr, 1)[:, :K_ARC]
+arc_edges = {}
+for i in range(len(arcs)):
+    for j in nn[i]:
+        a, b = sorted((i, int(j))); arc_edges[(a, b)] = round(float(Cr[a, b]), 3)
+arc_lab, arc_q = louvain([(a, b, w) for (a, b), w in arc_edges.items()], len(arcs))
+shapes_l = [a["shape"] for a in arcs]
+same = float(np.mean([shapes_l[i] == shapes_l[j] for i in range(len(arcs)) for j in nn[i]]))
+chance = sum(v * v for v in Counter(shapes_l).values()) / len(arcs) ** 2
+
+# 2. Writers linked by prose (stylistic) and by ideas (conceptual): communities on a 4-NN graph.
+def knn_comm(M, k=4):
+    E = {}
+    for i in range(N):
+        row = sorted(((M[i][j], j) for j in range(N) if j != i and M[i][j] is not None), reverse=True)[:k]
+        for w, j in row:
+            a, b = sorted((i, j)); E[(a, b)] = w
+    return louvain([(a, b, w) for (a, b), w in E.items()], N)
+sty_lab, sty_q = knn_comm(sty)
+con_lab, con_q = knn_comm(con)
+
+# 3. Influence communities on the documented graph (undirected, weight = conceptual).
+inf_lab, inf_q = louvain([(idx[d["from"]], idx[d["to"]], d["conceptual"] or 0.5) for d in documented], N)
+
+write("graphs.json", {
+    "arc": {"k": K_ARC, "edges": [[a, b, w] for (a, b), w in arc_edges.items()], "community": arc_lab,
+            "modularity": round(arc_q, 3), "same_shape_neighbours": round(same, 3), "same_shape_chance": round(chance, 3),
+            "median_r": round(float(np.median([Cr[i, j] for i in range(len(arcs)) for j in nn[i]])), 3)},
+    "prose": {"k": 4, "stylistic": sty_lab, "conceptual": con_lab,
+              "modularity": {"stylistic": round(sty_q, 3), "conceptual": round(con_q, 3)}},
+    "influence": {"community": inf_lab, "modularity": round(inf_q, 3)},
+})
