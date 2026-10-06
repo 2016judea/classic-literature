@@ -362,7 +362,7 @@
       { v: fmt(P.cross_bpc.mccarthy.shakespeare, 2), l: "Farthest pair: McCarthy reading Shakespeare", s: "bits per character" },
       { v: pct(P.purity.delta), l: "Works that cluster with their author", s: `Burrows Delta; ${pct(P.purity.ncd)} by compression` },
     ]);
-    const segHtml = `<span style="display:inline-flex;border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-left:auto">${["stylistic", "conceptual"].map(m => `<button data-m="${m}" style="border:0;padding:3px 8px;font-size:11px;cursor:pointer;background:${S.metric === m ? "var(--accent)" : "var(--surface-2)"};color:${S.metric === m ? "#fff" : "var(--ink-2)"}">${m}</button>`).join("")}</span>`;
+    const segHtml = `<span style="display:inline-flex;border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-left:auto">${["stylistic", "conceptual"].map(m => `<button data-m="${m}" style="border:0;padding:7px 10px;font-size:11px;cursor:pointer;background:${S.metric === m ? "var(--accent)" : "var(--surface-2)"};color:${S.metric === m ? "#fff" : "var(--ink-2)"}">${m}</button>`).join("")}</span>`;
     chart("p-nn", `Nearest writers to ${sel}`, (S.metric === "stylistic" ? "TF-IDF similarity of distinctive vocabulary." : "Embedding similarity of ideas and imagery.") + " Click a bar to recentre.", "w5 h2", {
       tooltip: { ...base().tooltip, trigger: "item", formatter: p => `${esc(p.name)}: ${fmt(p.value)}` },
       grid: { left: 150, right: 44, top: 8, bottom: 24 },
