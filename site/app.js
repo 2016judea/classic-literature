@@ -151,7 +151,8 @@
     flush(id);
   }
   // A tile that changes height (story mode, focus, rotation) redraws its chart to fit.
-  const ro = new ResizeObserver(es => es.forEach(e => { const c = charts.get(e.target.dataset.id); if (c && !c.isDisposed()) { c.resize(); if (PHONE() && isGraph(c.getOption())) fitGraph(c); } }));
+  // Deferred a frame: resizing inside the observer callback re-triggers it ("ResizeObserver loop").
+  const ro = new ResizeObserver(es => requestAnimationFrame(() => es.forEach(e => { const c = charts.get(e.target.dataset.id); if (c && !c.isDisposed()) { c.resize(); if (PHONE() && isGraph(c.getOption())) fitGraph(c); } })));
   const isGraph = o => o.series && o.series.some(se => se.type === "graph");
   function flush(id) {
     const job = pending.get(id); if (!job || !EC || !visible.has(id)) return;
