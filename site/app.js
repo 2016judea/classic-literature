@@ -122,7 +122,7 @@
     let t = document.getElementById("t-" + id);
     if (!t) {
       t = el("div", "tile " + cls); t.id = "t-" + id;
-      const h = el("header", "", `<h3></h3>`); const tools = el("div", "tools");
+      const h = el("header", "", `<h2></h2>`); const tools = el("div", "tools");
       const fb = el("button", "", '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>'); fb.title = "Focus mode"; fb.setAttribute("aria-label", "Focus mode"); fb.onclick = () => focus(id);
       const rb = el("button", "reset", '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/></svg>'); rb.title = "Reset view"; rb.setAttribute("aria-label", "Reset view"); rb.onclick = () => resetView(id);
       tools.append(rb, fb); h.append(tools); t.append(h);
@@ -130,8 +130,8 @@
       t.append(el("div", kind === "chart" ? "chart" : "body"));
       $("#grid").append(t);
     }
-    t.querySelector("h3").textContent = title;
-    t.querySelector(".sub").textContent = PHONE() ? (sub || "").replace(/(Pinch or scroll to zoom|[Pp]inch to zoom)\.?/, "Open full screen to pinch and pan.") : sub || "";
+    t.querySelector("h2").textContent = title;
+    t.querySelector(".sub").textContent = PHONE() ? (sub || "").replace(/(;\s*)?(Pinch or scroll to zoom|[Pp]inch to zoom)\.?/, (m, semi) => (semi ? "; open full screen to pinch and pan." : "Open full screen to pinch and pan.")) : sub || "";
     t.classList.toggle("lit", S.lit === id);
     return t.querySelector(kind === "chart" ? ".chart" : ".body");
   }
@@ -175,7 +175,7 @@
           if (!focused && se.data) {
             const sizes = se.data.map(d => (Array.isArray(d.symbolSize) ? 999 : d.symbolSize || 0)).sort((a, b) => b - a);
             const cut = sizes[Math.min(sizes.length - 1, 7)] || 0;
-            se.data.forEach(d => { if (d.label && d.label.show && !Array.isArray(d.symbolSize) && (d.symbolSize || 0) < cut && !((d.itemStyle || {}).borderWidth > 2)) d.label = { ...d.label, show: false }; });
+            se.data.forEach(d => { if (d.label && d.label.show && !Array.isArray(d.symbolSize) && (d.symbolSize || 0) < cut && !((d.itemStyle || {}).borderWidth >= 2)) d.label = { ...d.label, show: false }; });
           }
           // Small graphs lay out in one synchronous pass so the fit is exact; big ones animate,
           // which splits the simulation across frames instead of one long blocking task.
@@ -209,6 +209,8 @@
     for (let i = 0; i < data.count(); i++) { const l = data.getItemLayout(i); if (!l) continue; const p = c.convertToPixel({ seriesIndex: 0 }, l); x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
     if (!isFinite(x0)) return;
     const W = c.getWidth(), H = c.getHeight(), top = 34;
+    const fixed = (c.getOption().series[0].data || []).some(d => d.fixed);
+    if (fixed) return;
     const z = Math.min(1.6, (W - 36) / Math.max(1, x1 - x0), (H - top - 24) / Math.max(1, y1 - y0));
     c.dispatchAction({ type: "graphRoam", seriesIndex: 0, dx: W / 2 - (x0 + x1) / 2, dy: (H + top) / 2 - (y0 + y1) / 2 });
     c.dispatchAction({ type: "graphRoam", seriesIndex: 0, zoom: z, originX: W / 2, originY: (H + top) / 2 });
@@ -398,14 +400,15 @@
     // cluster forms, authors pulled toward every genre they wrote in. A bridge author sits between.
     const gEl = tile("g-graph", "Genres and the authors who cross them", "Genres pinned at the year their cluster forms (left to right); authors pulled toward each genre they wrote in. Authors between two genres are the bridges. Tap a genre or an author to filter.", "w12 h2");
     gEl.style.minHeight = "440px";
-    const W = Math.max(320, gEl.clientWidth || 800), H = Math.max(300, gEl.clientHeight || 340);
+    const narrowG = (gEl.clientWidth || 800) < 600;
+    const W = Math.max(300, gEl.clientWidth || 800), H = Math.max(300, gEl.clientHeight || 340);
     const y0 = Math.min(...G.genres.map(g => g.birth_year)), y1 = Math.max(...G.genres.map(g => g.birth_year));
     const rank = []; G.genres.map((g, i) => [g.birth_year, i]).sort((a, b) => a[0] - b[0]).forEach(([, i], k) => (rank[i] = k));
     const byAuthor = {}; set.forEach(w => { if (w.genre == null) return; (byAuthor[w.author] = byAuthor[w.author] || {})[w.genre] = ((byAuthor[w.author] || {})[w.genre] || 0) + 1; });
     const bridges = Object.entries(byAuthor).filter(([, gs]) => Object.keys(gs).length > 1).length;
-    const gN = G.genres.map((g, i) => ({ id: "g" + i, name: g.name, category: i, symbol: "roundRect", symbolSize: [Math.min(130, 30 + g.name.replace(" fiction", "").length * 5.6), 22], fixed: true,
-      x: W * (0.09 + 0.82 * (rank[i] / (G.genres.length - 1))), y: H * [0.22, 0.78, 0.5][rank[i] % 3], kind: "genre", n: set.filter(w => w.genre === i).length, born: g.birth_year,
-      itemStyle: { color: C[i], opacity: !gsel || gsel === g.name ? 1 : 0.25, borderRadius: 4 }, label: { show: true, color: "#fff", fontSize: 10.5, fontWeight: 600, formatter: g.name.replace(" fiction", "") }, z: 10 }));
+    const gN = G.genres.map((g, i) => ({ id: "g" + i, name: g.name, category: i, symbol: "roundRect", symbolSize: narrowG ? [Math.min(104, 18 + g.name.replace(" fiction", "").length * 6.2), 22] : [Math.min(130, 30 + g.name.replace(" fiction", "").length * 5.6), 22], fixed: true,
+      x: W * (narrowG ? 0.17 + 0.66 * (rank[i] / (G.genres.length - 1)) : 0.09 + 0.82 * (rank[i] / (G.genres.length - 1))), y: H * (narrowG ? [0.14, 0.38, 0.62, 0.86][rank[i] % 4] : [0.22, 0.78, 0.5][rank[i] % 3]), kind: "genre", n: set.filter(w => w.genre === i).length, born: g.birth_year,
+      itemStyle: { color: C[i], opacity: !gsel || gsel === g.name ? 1 : 0.25, borderRadius: 4 }, label: { show: true, color: "#fff", fontSize: narrowG ? 11 : 10.5, fontWeight: 600, formatter: narrowG ? g.name.replace(" fiction", "").replace("Victorian ", "Vict. ").replace("Early English novel", "Early English").replace("Historical romance", "Historical").replace("Nautical adventure", "Nautical").replace("American realism", "US realism").replace("Georgian prose", "Georgian") : g.name.replace(" fiction", "") }, z: 10 }));
     const aN = Object.entries(byAuthor).map(([a, gs]) => { const n = Object.values(gs).reduce((x, y) => x + y, 0); const multi = Object.keys(gs).length > 1;
       const top = +Object.entries(gs).sort((x, y) => y[1] - x[1])[0][0];
       return { id: "a:" + a, name: a, category: top, symbolSize: 4 + Math.sqrt(n) * 3, kind: "author", gs, n, multi,
@@ -418,7 +421,7 @@
       series: [{ type: "graph", layout: "force", roam: ROAM, top: 10, bottom: 10, data: [...gN, ...aN], links: gL, categories: G.genres.map((g, i) => ({ name: g.name, itemStyle: { color: C[i] } })),
         force: { repulsion: 22, edgeLength: [16, 60], gravity: 0.06, friction: 0.25 }, emphasis: { focus: "adjacency" }, labelLayout: { hideOverlap: true } }],
     }, p => { if (p.dataType !== "node") return; if (p.data.kind === "genre") S.f.genre = gsel === p.data.name ? "" : p.data.name; else S.f.author = S.f.author === p.data.name ? "" : p.data.name; refresh(); });
-    document.querySelector("#t-g-graph h3").textContent = "Genres and the authors who cross them";
+    document.querySelector("#t-g-graph h2").textContent = "Genres and the authors who cross them";
     document.querySelector("#t-g-graph .sub").textContent = `Genres in the order their clusters form, left to right (${y0}–${y1}); ${aN.length} authors pulled toward each genre they wrote in. ${bridges} write in more than one: the bridges. Tap a genre or author to filter.`;
     chart("g-density", "Novels per decade, by genre", "Corpus density. Most of the apparent 'acceleration' in genre change is this curve. Click a decade to filter to it.", "w12", {
       tooltip: { ...base().tooltip, trigger: "axis", axisPointer: { type: "shadow" } },
@@ -575,7 +578,7 @@
       { v: fmt(P.cross_bpc.mccarthy.shakespeare, 2), l: "Farthest pair: McCarthy reading Shakespeare", s: "bits per character" },
       { v: pct(P.purity.delta), l: "Works that cluster with their author", s: `Burrows Delta; ${pct(P.purity.ncd)} by compression` },
     ]);
-    const segHtml = `<span style="display:inline-flex;border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-left:auto">${["stylistic", "conceptual"].map(m => `<button data-m="${m}" style="border:0;padding:7px 10px;font-size:11px;cursor:pointer;background:${S.metric === m ? "var(--accent)" : "var(--surface-2)"};color:${S.metric === m ? "#fff" : "var(--ink-2)"}">${m}</button>`).join("")}</span>`;
+    const segHtml = `<span style="display:inline-flex;border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-left:auto">${["stylistic", "conceptual"].map(m => `<button data-m="${m}" style="border:0;padding:7px 10px;font-size:12px;min-height:32px;cursor:pointer;background:${S.metric === m ? "var(--btn)" : "var(--surface-2)"};color:${S.metric === m ? "#fff" : "var(--ink-2)"}">${m}</button>`).join("")}</span>`;
     chart("p-nn", `Nearest writers to ${sel}`, (S.metric === "stylistic" ? "TF-IDF similarity of distinctive vocabulary." : "Embedding similarity of ideas and imagery.") + " Click a bar to recentre.", "w5 h2", {
       tooltip: { ...base().tooltip, trigger: "item", formatter: p => `${esc(p.name)}: ${fmt(p.value)}` },
       grid: { left: 150, right: 44, top: 8, bottom: 24 },
@@ -583,7 +586,7 @@
       yAxis: axis({ type: "category", inverse: true, data: nn.map(x => x[0]), axisLabel: { color: css("--ink-2"), fontSize: 11.5 } }),
       series: [{ type: "bar", barWidth: "60%", data: nn.map(x => ({ value: x[1], itemStyle: { color: S.hl.includes(x[0]) ? C[1] : C[0], borderRadius: [0, 4, 4, 0] } })), label: { show: true, position: "right", color: css("--ink-2"), fontSize: 11, formatter: p => fmt(p.value) } }],
     }, p => { S.f.author = p.name; refresh(); });
-    const head = document.querySelector("#t-p-nn header"); if (!head.querySelector("[data-m]")) head.querySelector("h3").insertAdjacentHTML("afterend", segHtml); else head.querySelector("span").outerHTML = segHtml;
+    const head = document.querySelector("#t-p-nn header"); if (!head.querySelector("[data-m]")) head.querySelector("h2").insertAdjacentHTML("afterend", segHtml); else head.querySelector("span").outerHTML = segHtml;
     head.querySelectorAll("[data-m]").forEach(b => (b.onclick = () => { S.metric = b.dataset.m; refresh(); }));
     // Similarity graph: an edge for every pair in the top S.top% of the matrix; colour = Louvain
     // community on the 4-nearest-neighbour graph of the same metric, so clusters read as colours.

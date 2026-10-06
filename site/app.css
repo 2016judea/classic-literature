@@ -79,7 +79,7 @@ button,select,input{font:inherit;color:inherit}
 .tile{background:var(--surface);border:1px solid var(--border);border-radius:6px;display:flex;flex-direction:column;min-width:0;transition:box-shadow .25s}
 .tile.lit{box-shadow:0 0 0 2px var(--accent)}
 .tile header{display:flex;align-items:baseline;gap:8px;padding:8px 10px 0 12px}
-.tile h3{font-size:12.5px;font-weight:600;flex:1}
+.tile h2{font-size:12.5px;font-weight:600;flex:1}
 .tile .sub{font-size:11px;color:var(--muted);padding:0 12px}
 .tile .tools{display:flex;gap:2px}
 .tile .tools button{border:0;background:none;color:var(--muted);cursor:pointer;width:28px;height:28px;border-radius:4px;font-size:14px}
@@ -218,12 +218,12 @@ table.t tr.sel td{background:var(--sel)}
   .grid{gap:8px;margin-top:8px}
   .grid > .tile{grid-column:span 12;border-radius:0;border-left:0;border-right:0}
   .tile header{padding:10px 8px 0 12px}
-  .tile h3{font-size:14px}
+  .tile h2{font-size:14px}
   .tile .sub{font-size:12px;padding:0 12px}
   .tile .tools button{width:40px;height:40px;font-size:17px}
-  .tile .chart{min-height:min(52svh,420px)}
-  .h2 .chart{min-height:min(62svh,520px)}
-  .is-graph .chart{min-height:min(66svh,560px)!important}
+  .tile .chart{min-height:min(52vh,420px);min-height:min(52svh,420px)}
+  .h2 .chart{min-height:min(62vh,520px);min-height:min(62svh,520px)}
+  .is-graph .chart{min-height:min(66vh,560px)!important}
   .tile .body{max-height:none}
   .h2 .body{max-height:none}
   .list h4{font-size:12px}
@@ -246,7 +246,7 @@ table.t tr.sel td{background:var(--sel)}
   .story-nav button{min-height:44px;padding:0 18px}
   .story-on .tile.lit{position:sticky;top:52px;z-index:5}
   .story-on .tile.lit .sub,.story-on .tile.lit .ctl{display:none}
-  .story-on .tile.lit .chart{min-height:0!important;height:calc(100svh - 52px - 56px - var(--card, 220px) - 54px)}
+  .story-on .tile.lit .chart{min-height:0!important;flex:none;height:calc(100vh - 52px - 56px - var(--card, 220px) - 54px);height:calc(100svh - 52px - 56px - var(--card, 220px) - 54px)}
   .story-on .tile.lit .body{max-height:calc(100svh - 52px - 56px - var(--card, 220px) - 54px);overflow:auto}
   .story-on .main{padding-bottom:260px}
   .tile{scroll-margin-top:56px}
