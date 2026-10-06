@@ -1,5 +1,5 @@
 :root{
-  color-scheme:light;
+  color-scheme:light; --btn:#1c5cab;
   --plane:#f3f3f1; --surface:#fcfcfb; --surface-2:#f6f6f4;
   --ink:#0b0b0b; --ink-2:#52514e; --muted:#6c6b66;
   --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
@@ -256,3 +256,4 @@ table.t tr.sel td{background:var(--sel)}
 }
 .tile .tools button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle}
 @media (max-width:760px){.tile .tools button svg{width:20px;height:20px}}
+.ask button,.story-btn,.story-nav button:not(.ghost),.sheet-act .primary,.seg button.on{background:var(--btn,#1c5cab)}

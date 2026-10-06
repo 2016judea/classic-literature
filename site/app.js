@@ -139,7 +139,9 @@
   // within 300px of the viewport. A slicer change only re-renders tiles already drawn.
   const PHONE = () => matchMedia("(max-width: 760px)").matches;
   const pending = new Map(), visible = new Set();
-  const echartsReady = new Promise(res => { if (window.echarts) return res(); const tag = document.getElementById("ec"); tag.addEventListener("load", res); if (window.echarts) res(); });
+  // echarts (330 KB) is requested only once the data has landed, so on a slow phone link the
+  // numbers and titles paint first and the charts follow.
+  const echartsReady = new Promise(res => { const t = document.createElement("script"); t.src = "https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"; t.onload = res; document.head.append(t); });
   let EC = false; echartsReady.then(() => { EC = true; pending.forEach((_, id) => flush(id)); });
   const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { visible.add(e.target.dataset.id); flush(e.target.dataset.id); } }), { rootMargin: "300px 0px" });
   function chart(id, title, sub, cls, opt, onClick) {
@@ -175,7 +177,9 @@
             const cut = sizes[Math.min(sizes.length - 1, 7)] || 0;
             se.data.forEach(d => { if (d.label && d.label.show && !Array.isArray(d.symbolSize) && (d.symbolSize || 0) < cut && !((d.itemStyle || {}).borderWidth > 2)) d.label = { ...d.label, show: false }; });
           }
-          if (se.force) se.force = { ...se.force, layoutAnimation: false };
+          // Small graphs lay out in one synchronous pass so the fit is exact; big ones animate,
+          // which splits the simulation across frames instead of one long blocking task.
+          if (se.force) se.force = { ...se.force, layoutAnimation: (se.data || []).length > 150 };
         }
       });
       if (phone) o.tooltip = { ...(o.tooltip || {}), show: false, __fmt: (o.tooltip || {}).formatter };
@@ -185,6 +189,7 @@
     c.off("click"); c.getZr().off("click");
     if (graph && phone) {
       fitGraph(c);
+      if ((o.series[0].data || []).length > 150) [700, 1800, 3500].forEach(t => setTimeout(() => { if (!c.isDisposed()) fitGraph(c); }, t));
       // A tap picks the nearest node within 26px (a 52px target) and opens its card.
       c.getZr().on("click", ev => {
         const se = c.getModel().getSeriesByIndex(0); if (!se) return; const data = se.getData();
