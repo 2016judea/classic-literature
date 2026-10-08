@@ -1,5 +1,7 @@
 # Classic Literature
 
+**Live:** https://classic-literature-bi.vercel.app
+
 A Power BI-style analytics workspace over seven years of research on classic literature.
 Four report pages, one set of slicers (author, work, genre, era) that cross-filter every
 visual, a guided **Story** per page, and an **Ask** bar that turns a question into a live,
