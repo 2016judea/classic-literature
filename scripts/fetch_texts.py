@@ -6,7 +6,7 @@ Texts are public domain; cached under cache/texts/ (gitignored), four workers, a
 """
 import json, pathlib, time, urllib.request
 
-SRC = pathlib.Path.home() / "Desktop/literature-mutations/_data/books.json"
+SRC = pathlib.Path.home() / "Desktop/workspace/literature-mutations/_data/books.json"
 OUT = pathlib.Path(__file__).resolve().parent.parent / "cache/texts"
 OUT.mkdir(parents=True, exist_ok=True)
 

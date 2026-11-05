@@ -1,8 +1,8 @@
 """Extract every number the site shows from the research repos into site/data/*.json.
 
 Nothing on the page is typed by hand. Sources (read-only, never modified):
-  ~/Desktop/literature-mutations      genre mutations, influence network, stylistic matrix
-  ~/Desktop/persona-transformers/out  per-author character GPTs + stylometry
+  ~/Desktop/workspace/literature-mutations      genre mutations, influence network, stylistic matrix
+  ~/Desktop/workspace/persona-transformers/out  per-author character GPTs + stylometry
   cache/texts/                        full Gutenberg texts (scripts/fetch_texts.py) for sentiment
 
 Run: .venv/bin/python scripts/build_data.py
