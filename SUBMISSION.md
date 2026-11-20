@@ -3,7 +3,7 @@
 Copy from here. Pattern: `~/Desktop/workspace/breach-to-claim/SUBMISSION.md`; rejection history:
 `~/Desktop/workspace/small-business-intelligence-mcp/SUBMISSION-KIT.md` (30-char name, no pricing
 words in the description, support must be a URL, explicit annotation booleans, no model-behaviour
-lines in tool descriptions). Built 2026-11-20. Not filed.
+lines in tool descriptions). Built 2026-11-20. Filed and published 2026-11-20 (see the end).
 
 | Field | Value |
 |---|---|
@@ -154,3 +154,25 @@ Education, Research. If the form offers neither, Arts & Culture.
    fields above. Nothing here was filed.
 2. **After approval**: approval does not publish. Click Publish in claude.ai/directory/manage.
 3. **Optional, costs money:** a domain the LLC owns (see the `.vercel.app` note).
+
+## Submitted 2026-11-20
+
+Filed by Claude in Aidan's own Chrome (JavaScript run by process id into a background tab; `browser-as-aidan`).
+Nothing was paid and nothing was sent to a person.
+
+| Where | Status | UTC | Listing |
+|---|---|---|---|
+| Claude Connectors Directory | **PUBLISHED** (approved within minutes of filing; Publish pressed 17:17) | 17:12 filed | claude.ai/directory/manage/classic-literature · slug `classic-literature` (permanent) |
+
+**What was filed.** Custom connector "Classic Literature" added to his Claude (6 tools, 0 resources, auth none
+detected). Name, one-liner and description verbatim from this kit. Categories: Education, Media & Entertainment,
+Data & Analytics. Author Brick and Mortar AI LLC (https://classic-literature-bi.vercel.app/). Docs `/connect/`,
+support the GitHub issues URL, privacy `/privacy/`, custom icon `/icon.png` (portal loaded it at 512). Use cases
+= starter prompts 1-3. Prerequisites: none. Read only. Company Brick and Mortar AI LLC, https://brickandmortar.dev,
+Aidan Jude, Founder. Auth none. Data handling "We own the API", no health data, no sponsored content. Self-tested:
+all six tools were run through the MCP Inspector CLI (`@modelcontextprotocol/inspector --cli`) against the live
+endpoint before ticking it. All seven compliance boxes ticked; the additional note is the reviewer note above.
+
+**Portal mechanics that cost a cycle:** "Connectors" moved out of Settings into Customize; the directory form's
+own "Add custom connector" does the job. Chrome throttles timers in a hidden tab, so an in-page `await sleep()`
+can stall for minutes: drive each step as a synchronous `execute` and wait outside the page.
