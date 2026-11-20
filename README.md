@@ -38,6 +38,30 @@ parser (`site/ask-local.js`) over the same data. Rate limit: 8 questions per IP 
 
     npm install && npm test   # validator + every example chip through the local parser
 
+## MCP
+
+The same data as a remote MCP server, so Claude (or any MCP client) can answer from it.
+
+**Server URL:** `https://classic-literature-bi.vercel.app/api/mcp` · Streamable HTTP, no auth.
+Setup: [/connect/](https://classic-literature-bi.vercel.app/connect/) ·
+privacy: [/privacy/](https://classic-literature-bi.vercel.app/privacy/).
+In Claude: Settings → Connectors → Add custom connector, paste the URL.
+
+| Tool | Answers |
+|---|---|
+| `novel_mood_arc` | A novel's sentiment arc, its shape, start vs end and where it ranks, its sharpest turn, and the 5 novels whose arcs correlate most |
+| `writers_who_sound_like` | Nearest of the 77 writers by TF-IDF vocabulary and by embedding, the prose circle, and the persona-transformers cross-reading for McCarthy, Melville, Shakespeare |
+| `influence_chain` | Shortest chain of documented influence between two authors, each link with direction, source and similarity |
+| `author_influences` | Who influenced an author and whom they influenced, ranked by conceptual similarity |
+| `genre_of_book` | The genre a novel's prose places it in (or every genre an author wrote in), with when that genre's name caught on |
+| `genre_history` | When a genre's cluster formed and when its name took off in Google Books; empty lists them all |
+
+`api/mcp.js` reads `site/data/*.json` and only looks up, ranks and joins: every number it
+returns is in that JSON. Titles and names are fuzzy-matched; a miss returns `found: false`
+with the closest matches. Every link it hands out opens the matching view on the site and
+carries `src=mcp`. One PostHog event per call (tool, ok, duration), nothing the person typed.
+Tests: `test/mcp.test.js`. Directory listing kit: [`SUBMISSION.md`](SUBMISSION.md).
+
 McCarthy's novels are in copyright and are not redistributed; only derived measurements
 from `persona-transformers` appear here. Gutenberg texts are public domain.
 

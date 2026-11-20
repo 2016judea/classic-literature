@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Classic Literature connector for Claude (MCP)</title>
+<meta name="description" content="Add the Classic Literature MCP server to Claude: emotional arcs of 339 classic novels, writers who sound alike, chains of literary influence and genres recovered from prose.">
+<link rel="canonical" href="https://classic-literature-bi.vercel.app/connect/">
+<meta property="og:title" content="Classic Literature connector for Claude (MCP)"><meta property="og:description" content="Add the Classic Literature MCP server to Claude: emotional arcs of 339 classic novels, writers who sound alike, chains of literary influence and genres recovered from prose."><meta property="og:url" content="https://classic-literature-bi.vercel.app/connect/"><meta property="og:type" content="website">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+:root{color-scheme:light;--bg:#f3f3f1;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--muted:#6c6b66;--border:#dcdbd5;--link:#1c5cab;--code:#ecebe6}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--bg:#0d0d0d;--surface:#1a1a19;--ink:#fff;--ink-2:#c3c2b7;--muted:#898781;--border:#33332f;--link:#7fb0f0;--code:#222220}}
+:root[data-theme=dark]{color-scheme:dark;--bg:#0d0d0d;--surface:#1a1a19;--ink:#fff;--ink-2:#c3c2b7;--muted:#898781;--border:#33332f;--link:#7fb0f0;--code:#222220}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding-inline:20px}
+header{border-bottom:1px solid var(--border);background:var(--surface)}
+header .wrap{display:flex;align-items:center;gap:10px;min-height:56px}
+header img{width:28px;height:28px}
+header a{color:var(--ink);text-decoration:none;font-weight:600}
+main{padding-block:28px 40px}
+h1{font-size:clamp(26px,6vw,34px);line-height:1.15;margin:0 0 12px}
+h2{font-size:18px;margin:30px 0 8px}
+p,li{color:var(--ink-2)}
+.lede{font-size:18px;color:var(--ink)}
+a{color:var(--link)}
+code,pre{font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);border-radius:6px}
+code{padding:1px 5px}
+pre{padding:12px 14px;white-space:pre-wrap;word-break:break-all;color:var(--ink);border:1px solid var(--border)}
+ul{padding-left:20px} li{margin:6px 0}
+.prompts li{color:var(--ink)}
+footer{border-top:1px solid var(--border);padding-block:18px 28px;font-size:14px}
+footer p{color:var(--muted)}
+</style>
+<script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script><script defer src="/_vercel/insights/script.js"></script>
+<!-- bm-posthog:begin v2 — shared across every Vercel prototype; source ~/.claude/skills/site-analytics/posthog_snippet.html. ?me=1 opts this browser out on this site (?me=0 undoes); ?me=1&next=host1,host2 walks the opt-out across sites; headless (navigator.webdriver) never loads it. -->
+<script>
+(function(w,d){var S="classic-literature",K="bm_me",me=false,u,p,n;
+try{u=new URLSearchParams(location.search);p=u.get("me");n=u.get("next");}catch(e){}
+try{if(p==="1"){localStorage.setItem(K,"1");}else if(p==="0"){localStorage.removeItem(K);}}catch(e){}
+if(p==="1"){d.cookie=K+"=1; path=/; max-age=63072000; SameSite=Lax";}else if(p==="0"){d.cookie=K+"=; path=/; max-age=0; SameSite=Lax";}
+try{me=localStorage.getItem(K)==="1";}catch(e){}
+if(!me&&/(?:^|; )bm_me=1/.test(d.cookie))me=true;
+if(p==="1"&&n){var h=n.split(","),f=h.shift();if(/^[a-z0-9.-]+$/.test(f)&&(f.slice(-11)===".vercel.app"||f==="brickandmortar.dev"||f==="readglean.com")){location.replace("https://"+f+"/?me=1"+(h.length?"&next="+h.join(","):""));}}
+if(navigator.webdriver===true)return;
+!function(t,e){var o,n,p,r;e.__SV||(w.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once unregister identify setPersonProperties reset get_distinct_id get_session_id alias set_config startSessionRecording stopSessionRecording opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing captureException getFeatureFlag isFeatureEnabled onFeatureFlags".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(d,w.posthog||[]);
+posthog.init("phc_yFgRGppL6H7DvhgZTQKbHdrY5oqnpLT482rrNYtLqnAx",{api_host:"https://us.i.posthog.com",person_profiles:"identified_only",persistence:"localStorage+cookie",opt_out_capturing_by_default:me});
+if(me){posthog.opt_out_capturing();}else{if(p==="0")posthog.opt_in_capturing();posthog.register({site:S});}
+})(window,document);
+</script>
+<!-- bm-posthog:end -->
+</head>
+<body>
+<header><div class="wrap"><img src="/favicon.svg" alt=""><a href="/">Classic Literature</a></div></header>
+<main class="wrap">
+<h1>Ask Claude about classic novels, from their full texts</h1>
+<p class="lede">Add Classic Literature as a connector and Claude can read a novel's emotional arc, find the writers who sound most alike, trace who influenced whom, and say what genre a book's own prose puts it in. Every number comes from the data, not from the model.</p>
+<h2>Server URL</h2>
+<pre>https://classic-literature-bi.vercel.app/api/mcp</pre>
+<p>Streamable HTTP. No account, no key, nothing to sign in to. Six read-only tools.</p>
+<h2>Add it to Claude</h2>
+<p>On claude.ai or the Claude app: <b>Settings → Connectors → Add custom connector</b>. Name it Classic Literature, paste the URL above, and save. Then turn it on in a chat from the tools menu.</p>
+<p>In Claude Code:</p>
+<pre>claude mcp add --transport http classic-literature https://classic-literature-bi.vercel.app/api/mcp</pre>
+<h2>The tools</h2>
+<ul>
+<li><code>novel_mood_arc</code>: a novel's emotional arc across 100 parts of its full text, its shape, where it turns, and the five novels whose arcs move most alike. 339 novels, 1678 to 1928.</li>
+<li><code>writers_who_sound_like</code>: the nearest writers by vocabulary and by ideas, out of 77 from Homer to Joyce, plus what a small GPT trained on McCarthy, Melville or Shakespeare makes of the others.</li>
+<li><code>influence_chain</code>: the shortest chain of documented influence between two authors, link by link, with its sources.</li>
+<li><code>author_influences</code>: who influenced an author and whom they influenced.</li>
+<li><code>genre_of_book</code>: the genre a novel's prose places it in, recovered from the words alone, or the genres of all of an author's novels.</li>
+<li><code>genre_history</code>: when a genre formed in the prose, and when its name caught on in print.</li>
+</ul>
+<h2>Then ask</h2>
+<ul class="prompts">
+<li>What's the emotional arc of Moby-Dick, and which novels move most like it?</li>
+<li>Who writes most like Herman Melville, by vocabulary and by ideas?</li>
+<li>How is Plato connected to Virginia Woolf through literary influence?</li>
+</ul>
+<p>The corpus is public-domain novels up to 1928. Ask about a book outside it and Claude says so and offers the closest titles. Each answer links to the same view in the <a href="/">workspace</a>. <a href="/privacy/">Privacy</a>.</p>
+</main>
+<footer><div class="wrap"><p>Every number comes from measurements of the books' full texts, published with the code at <a href="https://github.com/2016judea/classic-literature">github.com/2016judea/classic-literature</a>.</p>
+<p><a href="/">The workspace</a> · <a href="/connect/">Use it in Claude</a> · <a href="/privacy/">Privacy</a> · <a href="https://github.com/2016judea/classic-literature/issues">Support</a></p></div></footer>
+</body>
+</html>

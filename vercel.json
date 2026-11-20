@@ -1,1 +1,1 @@
-{ "outputDirectory": "site", "buildCommand": "", "installCommand": "npm install", "functions": { "api/ask.js": { "maxDuration": 30 } } }
+{"outputDirectory": "site", "buildCommand": "", "installCommand": "npm install", "functions": {"api/ask.js": {"maxDuration": 30}, "api/mcp.js": {"maxDuration": 10}}}

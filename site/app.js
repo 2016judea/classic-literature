@@ -50,7 +50,7 @@
 
   // ------------------------------------------------------------------ state
   const S = { page: "sentiment", f: { author: "", work: "", genre: "", from: "", to: "" }, shape: "", metric: "stylistic", hl: [], focus: null, lit: null, path: null, infColor: "form", top: 5, atlasWorks: false };
-  try { const p = new URLSearchParams(location.hash.slice(1)); if (p.get("p")) S.page = p.get("p"); for (const k of Object.keys(S.f)) if (p.get(k)) S.f[k] = p.get(k); } catch (e) {}
+  try { const p = new URLSearchParams(location.hash.slice(1)); if (p.get("p")) S.page = p.get("p"); for (const k of Object.keys(S.f)) if (p.get(k)) S.f[k] = p.get(k); const ch = (p.get("chain") || "").split("|"); if (ch.length === 2 && ch[0] && ch[1]) S.path = ch; } catch (e) {}
 
   function inRange(y) { return (!S.f.from || y >= +S.f.from) && (!S.f.to || y <= +S.f.to + 9); }
   function filterWorks(f = S.f, opts = {}) {
@@ -85,7 +85,7 @@
     if (S.shape) { const s = el("span", "", `shape: <b>${S.shape}</b>`); const x = el("button", "", "✕"); x.onclick = () => { S.shape = ""; refresh(); }; s.append(x); c.append(s); }
     const nF = Object.values(S.f).filter(Boolean).length + (S.cohort ? 1 : 0) + (S.path ? 1 : 0) + (S.shape ? 1 : 0);
     $("#mfilters").textContent = nF ? `Filters (${nF})` : "Filters";
-    try { const p = new URLSearchParams({ p: S.page, ...Object.fromEntries(Object.entries(S.f).filter(([, v]) => v)) }); history.replaceState(null, "", "#" + p); } catch (e) {}
+    try { const p = new URLSearchParams({ p: S.page, ...Object.fromEntries(Object.entries(S.f).filter(([, v]) => v)), ...(S.path && S.path[1] ? { chain: S.path.join("|") } : {}) }); history.replaceState(null, "", "#" + p); } catch (e) {}
   }
   for (const k of ["author", "work", "genre", "from", "to"]) $("#f-" + k).onchange = e => { S.f[k] = e.target.value; if (k === "author" || k === "genre") { if (S.f.work && !filterWorks({ ...S.f, work: "" }).some(w => w.title === S.f.work)) S.f.work = ""; } S.hl = []; refresh(); };
   // Phone: the slicers live in a bottom sheet behind one "Filters (n)" button.
