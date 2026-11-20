@@ -88,7 +88,7 @@ function link(params) {
 function notFound(kind, query, m, extra = {}) {
   const out = { found: false, query, kind };
   if (m.ambiguous) { out.answer = `"${query}" matches more than one ${kind}.`; out.did_you_mean = m.ambiguous; }
-  else { out.answer = `No ${kind} matching "${query}" in this corpus.`; out.closest_matches = m.closest; }
+  else { out.answer = `No ${kind} matching "${query}".`; out.closest_matches = m.closest; }
   return { ...out, ...extra };
 }
 
@@ -120,7 +120,7 @@ const shapeCounts = Object.fromEntries(SHAPES.map(s => [s, SEN.arcs.filter(a => 
 function moodArc(args) {
   if (!String(args.title || "").trim()) return err("Pass the novel's title as title.");
   const { m, authorNote, query } = findWork(args.title, args.author);
-  if (!m.hit) return notFound("novel", query, m, { browse: link({ p: "sentiment" }) });
+  if (!m.hit) return notFound("novel in this corpus", query, m, { browse: link({ p: "sentiment" }) });
   const w = m.hit, ai = arcIndex.get(w.id);
   if (ai == null) return { found: true, novel: workTitle(w), scored: false, answer: `${w.title} is in the corpus but its sentiment arc was not scored (${works.length - SCORED} of ${works.length} novels were not).`, open_on_site: link({ p: "genres", work: w.title }) };
   const a = SEN.arcs[ai];
@@ -158,7 +158,7 @@ function soundsLike(args) {
   if (!m.hit) {
     const nov = match(args.author, WORK_AUTHORS);
     const extra = nov.hit ? { note: `${nov.hit} is in the novel corpus but not among the ${PR.authors.length} writers scored for prose similarity. genre_of_book with author="${nov.hit}" gives their genre neighbours instead.` } : {};
-    return notFound("writer", args.author, m, { ...extra, browse: link({ p: "prose" }) });
+    return notFound("writer in the prose-similarity set", args.author, m, { ...extra, browse: link({ p: "prose" }) });
   }
   const name = m.hit, i = PR.authors.indexOf(name), out = { found: true, writer: name };
   if (i >= 0) {
@@ -272,7 +272,7 @@ function genreOfBook(args) {
   if (!t && !a) return err("Pass a title, an author, or both.");
   if (t) {
     const { m, authorNote, query } = findWork(t, a);
-    if (!m.hit) return notFound("novel", query, m, { browse: link({ p: "genres" }) });
+    if (!m.hit) return notFound("novel in this corpus", query, m, { browse: link({ p: "genres" }) });
     const w = m.hit, g = G.genres[w.genre];
     const peers = onePerBook(works.filter(x => x.genre === w.genre && !sameBook(x, w)).sort((x, y) => Math.abs(x.year - w.year) - Math.abs(y.year - w.year))).slice(0, 8).map(workTitle);
     const c = clockOf(g.name);
@@ -286,7 +286,7 @@ function genreOfBook(args) {
     };
   }
   const m = match(a, WORK_AUTHORS);
-  if (!m.hit) return notFound("novelist", a, m, { browse: link({ p: "genres" }) });
+  if (!m.hit) return notFound("novelist in this corpus", a, m, { browse: link({ p: "genres" }) });
   const mine = works.filter(w => w.author === m.hit).sort((x, y) => x.year - y.year);
   const counts = {}; mine.forEach(w => (counts[genreName(w.genre)] = (counts[genreName(w.genre)] || 0) + 1));
   return {
@@ -318,7 +318,7 @@ function genreHistory(args) {
   const m = match(q, GENRE_NAMES, x => x.label);
   if (m.ambiguous) { const uniq = [...new Set(m.ambiguous.map(l => { const e = GENRE_NAMES.find(x => x.label === l); return (e.genre && e.genre.name) || e.clock.name; }))]; if (uniq.length === 1) m.hit = GENRE_NAMES.find(x => x.label === m.ambiguous[0]); else m.ambiguous = uniq; }
   m.closest = [...new Set(m.closest.map(l => { const e = GENRE_NAMES.find(x => x.label === l); return (e.genre && e.genre.name) || e.clock.name; }))];
-  if (!m.hit) return notFound("genre", q, m, { available: [...G.genres.map(g => g.name), ...G.clock.communities.filter(c => !CLOCK_TO_GENRE[c.key]).map(c => c.name)], browse: link({ p: "genres" }) });
+  if (!m.hit) return notFound("genre in this corpus", q, m, { available: [...G.genres.map(g => g.name), ...G.clock.communities.filter(c => !CLOCK_TO_GENRE[c.key]).map(c => c.name)], browse: link({ p: "genres" }) });
   const e = m.hit, g = e.genre, c = e.clock;
   const out = { found: true, genre: g ? g.name : c.name };
   if (g) {

@@ -74,7 +74,7 @@ test("not found: says so and lists the closest titles", async () => {
   assert.ok(!isError);
   assert.strictEqual(out.found, false);
   assert.ok(out.closest_matches.length > 0);
-  assert.match(out.answer, /No novel matching "Harry Potter"/);
+  assert.match(out.answer, /No novel in this corpus matching "Harry Potter"/);
 });
 
 test("ambiguous: 'Bronte' asks which one", async () => {
