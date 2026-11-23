@@ -58,7 +58,7 @@ if(me){posthog.opt_out_capturing();}else{if(p==="0")posthog.opt_in_capturing();p
 <p class="lede">Add Classic Literature as a connector and Claude can read a novel's emotional arc, find the writers who sound most alike, trace who influenced whom, and say what genre a book's own prose puts it in. Every number comes from the data, not from the model.</p>
 <h2>Server URL</h2>
 <pre>https://classic-literature-bi.vercel.app/api/mcp</pre>
-<p>Streamable HTTP. No account, no key, nothing to sign in to. Six read-only tools.</p>
+<p>Streamable HTTP. No account, no key, nothing to sign in to. Thirteen read-only tools.</p>
 <h2>Add it to Claude</h2>
 <p>On claude.ai or the Claude app: <b>Settings → Connectors → Add custom connector</b>. Name it Classic Literature, paste the URL above, and save. Then turn it on in a chat from the tools menu.</p>
 <p>In Claude Code:</p>
@@ -71,6 +71,13 @@ if(me){posthog.opt_out_capturing();}else{if(p==="0")posthog.opt_in_capturing();p
 <li><code>author_influences</code>: who influenced an author and whom they influenced.</li>
 <li><code>genre_of_book</code>: the genre a novel's prose places it in, recovered from the words alone, or the genres of all of an author's novels.</li>
 <li><code>genre_history</code>: when a genre formed in the prose, and when its name caught on in print.</li>
+<li><code>books_like</code>: novels like a given one, by prose genre and by emotional arc.</li>
+<li><code>does_book_have_a_happy_ending</code>: whether a novel ends happier or sadder than it begins, in one line, then the full arc.</li>
+<li><code>saddest_and_happiest_novels</code>: the corpus ranked by overall mood, the mood of the ending, or how far it moves.</li>
+<li><code>novels_by_author</code>: an author's novels in the corpus, each with its prose genre.</li>
+<li><code>classic_novels_from_era</code>: the novels from a year range or a genre.</li>
+<li><code>did_author_influence</code>: a yes or no on one author influencing another, and the chain if it runs through others.</li>
+<li><code>what_genres_are_there</code>: every genre recovered from the prose and every genre-name clock.</li>
 </ul>
 <h2>Then ask</h2>
 <ul class="prompts">

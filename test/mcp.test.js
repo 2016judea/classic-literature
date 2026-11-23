@@ -20,9 +20,10 @@ test("initialize names the server and carries instructions", async () => {
   assert.match(r.instructions, /found: false/);
 });
 
-test("tools/list: six read-only tools with schemas", async () => {
+test("tools/list: six engines plus seven theme doors, read-only, with schemas", async () => {
   const { tools } = await rpc("tools/list", {});
-  assert.deepStrictEqual(tools.map(t => t.name), ["novel_mood_arc", "writers_who_sound_like", "influence_chain", "author_influences", "genre_of_book", "genre_history"]);
+  assert.deepStrictEqual(tools.map(t => t.name), ["novel_mood_arc", "writers_who_sound_like", "influence_chain", "author_influences", "genre_of_book", "genre_history",
+    "books_like", "does_book_have_a_happy_ending", "saddest_and_happiest_novels", "novels_by_author", "classic_novels_from_era", "did_author_influence", "what_genres_are_there"]);
   for (const t of tools) {
     assert.strictEqual(t.annotations.readOnlyHint, true, t.name);
     assert.strictEqual(t.inputSchema.type, "object", t.name);
@@ -170,7 +171,7 @@ test("HTTP: POST answers JSON-RPC, GET is 405 with the URL", async () => {
   });
   const post = await run("POST", { jsonrpc: "2.0", id: 1, method: "tools/list" });
   assert.strictEqual(post.status, 200);
-  assert.strictEqual(post.body.result.tools.length, 6);
+  assert.strictEqual(post.body.result.tools.length, 13);
   const get = await run("GET");
   assert.strictEqual(get.status, 405);
   assert.match(get.body.url, /\/api\/mcp$/);
@@ -183,4 +184,25 @@ test("/connect/ lists every tool and states counts that match the data", () => {
   assert.ok(html.includes(`${SEN.arcs.length} novels, ${Math.min(...ys)} to ${Math.max(...ys)}`));
   assert.ok(html.includes(`out of ${PR.authors.length} from Homer`));
   assert.ok(html.includes(mcp.SITE + "/api/mcp"));
+});
+
+test("theme doors wrap the engines and answer in the user's terms", async () => {
+  const c = async (n, a) => (await mcp.handleOne({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: n, arguments: a } }, { test: true })).result;
+  const happy = (await c("does_book_have_a_happy_ending", { title: "Tess of the d'Urbervilles" })).structuredContent;
+  assert.strictEqual(happy.ends_happier_or_sadder, "sadder");
+  assert.match(happy.answer, /ends sadder than it begins/);
+  const like = (await c("books_like", { title: "Moby-Dick" })).structuredContent;
+  assert.ok(like.found && like.same_genre_by_prose_nearest_in_time.length && like.emotional_arc_moves_most_alike.length);
+  const sad = (await c("saddest_and_happiest_novels", { direction: "saddest", limit: 3 })).structuredContent;
+  assert.strictEqual(sad.saddest.length, 3);
+  assert.ok(sad.saddest[0].mean_polarity <= sad.saddest[2].mean_polarity);
+  assert.strictEqual(sad.happiest, undefined);
+  const era = (await c("classic_novels_from_era", { genre: "sea story", from_year: 1850, to_year: 1900 })).structuredContent;
+  assert.ok(era.novels.every(n => n.year >= 1850 && n.year <= 1900 && n.genre === "Nautical adventure"));
+  const inf = (await c("did_author_influence", { from_author: "Poe", to_author: "Arthur Conan Doyle" })).structuredContent;
+  assert.strictEqual(inf.direct_link, true);
+  assert.strictEqual((await c("novels_by_author", { author: "Dickens" })).structuredContent.author, "Charles Dickens");
+  assert.ok((await c("what_genres_are_there", {})).structuredContent.genres_recovered_from_prose.length >= 8);
+  assert.strictEqual((await c("classic_novels_from_era", {})).isError, true);
+  for (const t of mcp.TOOLS) assert.ok(t.title && t.annotations.readOnlyHint === true, t.name);
 });

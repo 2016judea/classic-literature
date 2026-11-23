@@ -2,7 +2,8 @@
 // the same data the site renders. Pattern from breach-to-claim api/mcp.js.
 // Every number a tool returns is read from site/data/*.json (built by scripts/build_data.py);
 // this file only looks up, ranks and joins. Every link handed out carries src=mcp.
-// One PostHog event per tool call: the tool, ok and duration. Nothing the person typed is logged.
+// One PostHog event per tool call: the tool, ok and duration, plus the name a caller reached for when
+// it is not one of ours (attempted). Nothing the person typed is logged.
 const G = require("../site/data/genres.json");
 const SEN = require("../site/data/sentiment.json");
 const INF = require("../site/data/influence.json");
@@ -338,6 +339,108 @@ function genreHistory(args) {
   return out;
 }
 
+// ------------------------------------------------------------------ theme doors
+// One named tool per kind of question people ask, each a thin wrapper over the engines above
+// (QUESTIONS.md; ~/.claude/CLAUDE.md "Every question theme gets a tool", 2026-11-22).
+function booksLike(args) {
+  if (!String(args.title || "").trim()) return err("Pass the novel's title as title.");
+  const { m, authorNote, query } = findWork(args.title, args.author);
+  if (!m.hit) return notFound("novel in this corpus", query, m, { browse: link({ p: "genres" }) });
+  const w = m.hit, g = G.genres[w.genre], ai = arcIndex.get(w.id);
+  const arcAlike = ai == null ? [] : onePerBook(GR.arc.edges.filter(e => e[0] === ai || e[1] === ai).sort((x, y) => y[2] - x[2])
+    .map(e => { const b = SEN.arcs[e[0] === ai ? e[1] : e[0]]; return { ...workTitle(works[b.work]), shape: b.shape, r: e[2] }; })
+    .filter(x => !sameBook(x, w))).slice(0, GR.arc.k);
+  const genrePeers = onePerBook(works.filter(x => x.genre === w.genre && !sameBook(x, w)).sort((x, y) => Math.abs(x.year - w.year) - Math.abs(y.year - w.year))).slice(0, 8).map(workTitle);
+  const both = arcAlike.filter(a => genrePeers.some(p => sameBook(p, a)));
+  return {
+    found: true, novel: workTitle(w), genre_from_prose: g.name,
+    alike_in_both_genre_and_arc: both,
+    same_genre_by_prose_nearest_in_time: genrePeers,
+    emotional_arc_moves_most_alike: arcAlike,
+    ...(ai == null ? { arc_note: `${w.title}'s sentiment arc was not scored, so only genre neighbours are listed.` } : {}),
+    how: `Two measured kinds of alike. Genre: the cluster the novel's own vocabulary places it in (${G.genres.length} genres over ${G.n_books} pre-1929 novels), nearest in year. Arc: Pearson r between z-scored sentiment arcs (1 = they move identically). Only novels in this corpus are listed.`,
+    ...(authorNote ? { note: authorNote } : {}),
+    open_on_site: link({ p: "genres", work: w.title }),
+  };
+}
+
+function bookEndsHappy(args) {
+  const out = moodArc({ title: args.title, author: args.author });
+  if (out.__error || !out.found || out.scored === false) return out;
+  const verdict = out.change_end_minus_start > 0 ? "happier" : out.change_end_minus_start < 0 ? "sadder" : "level";
+  return { answer: `${out.novel.title} ends ${verdict} than it begins: sentiment ${out.start} at the start, ${out.end} at the end (change ${out.change_end_minus_start}; rank ${out.change_rank}). Shape: ${out.shape}, ${out.shape_means}.`, ...out, ends_happier_or_sadder: verdict };
+}
+
+const MEASURES = {
+  overall: { key: a => a.mean, label: "mean polarity across the whole text" },
+  ending: { key: a => a.end, label: "polarity of the last 10% of the text" },
+  change: { key: a => changeOf(a), label: "end minus start (how far the mood moves by the last page)" },
+};
+function saddestHappiest(args) {
+  const measure = MEASURES[args.measure] ? args.measure : "overall";
+  const dir = ["saddest", "happiest"].includes(args.direction) ? args.direction : "both";
+  const lim = Math.max(1, Math.min(25, args.limit || 10));
+  const from = Number.isFinite(+args.from_year) && args.from_year != null ? +args.from_year : -Infinity;
+  const to = Number.isFinite(+args.to_year) && args.to_year != null ? +args.to_year : Infinity;
+  const k = MEASURES[measure].key;
+  const pool = SEN.arcs.filter(a => works[a.work].year >= from && works[a.work].year <= to)
+    .map(a => ({ ...workTitle(works[a.work]), genre_from_prose: genreName(works[a.work].genre), shape: a.shape, start: a.start, end: a.end, change_end_minus_start: changeOf(a), mean_polarity: a.mean, _v: k(a) }));
+  if (!pool.length) return { found: false, answer: `No scored novel falls between ${args.from_year} and ${args.to_year}. Scored novels run ${SPAN}.` };
+  const asc = onePerBook([...pool].sort((x, y) => x._v - y._v)), clean = l => l.slice(0, lim).map(({ _v, ...r }) => r);
+  return {
+    found: true, measure, measure_means: MEASURES[measure].label, novels_ranked: asc.length,
+    ...(dir !== "happiest" ? { saddest: clean(asc) } : {}),
+    ...(dir !== "saddest" ? { happiest: clean([...asc].reverse()) } : {}),
+    how: `${SEN.method}. Polarity runs -1 to 1 and measures the words, not the plot: a novel told in warm language can still end in a death. ${SCORED} novels scored, ${SPAN}. Other measures: overall, ending, change.`,
+    open_on_site: link({ p: "sentiment" }),
+  };
+}
+
+function novelsByAuthor(args) {
+  if (!String(args.author || "").trim()) return err("Pass the novelist's name as author.");
+  return genreOfBook({ author: args.author });
+}
+
+function novelsFromEra(args) {
+  const from = args.from_year != null && args.from_year !== "" ? +args.from_year : null;
+  const to = args.to_year != null && args.to_year !== "" ? +args.to_year : null;
+  if (from == null && to == null && !String(args.genre || "").trim()) return err("Pass from_year and/or to_year (e.g. 1840 and 1849), a genre, or both.");
+  let gid = null, gname = null;
+  if (String(args.genre || "").trim()) {
+    const m = match(args.genre, GENRE_NAMES, x => x.label);
+    if (m.ambiguous) { const g = GENRE_NAMES.find(x => x.label === m.ambiguous[0]); if (m.ambiguous.every(l => GENRE_NAMES.find(x => x.label === l).genre === g.genre)) m.hit = g; }
+    if (!m.hit) return notFound("genre among the prose clusters", args.genre, m, { available: G.genres.map(g => g.name) });
+    if (!m.hit.genre) return { found: false, answer: `${m.hit.clock.name} is tracked as a genre name in print but is not one of the ${G.genres.length} genres the novels' prose separates into.`, available: G.genres.map(g => g.name) };
+    gid = m.hit.genre.id; gname = m.hit.genre.name;
+  }
+  const lim = Math.max(1, Math.min(100, args.limit || 40));
+  const hits = onePerBook(works.filter(w => (from == null || w.year >= from) && (to == null || w.year <= to) && (gid == null || w.genre === gid)).sort((x, y) => x.year - y.year));
+  const yrs = works.map(w => w.year);
+  if (!hits.length) return { found: false, answer: `No novel in this corpus matches. The corpus runs ${Math.min(...yrs)}-${Math.max(...yrs)}.`, genres: G.genres.map(g => g.name) };
+  const byGenre = {}; hits.forEach(w => (byGenre[genreName(w.genre)] = (byGenre[genreName(w.genre)] || 0) + 1));
+  return {
+    found: true, from_year: from, to_year: to, genre: gname, novels_matching: hits.length,
+    by_genre: Object.entries(byGenre).sort((x, y) => y[1] - x[1]).map(([genre, n]) => ({ genre, novels: n })),
+    novels: hits.slice(0, lim).map(w => ({ ...workTitle(w), genre: genreName(w.genre), arc_scored: arcIndex.has(w.id) })),
+    ...(hits.length > lim ? { more: `${hits.length - lim} more; raise limit (max 100) or narrow the years.` } : {}),
+    how: `The ${G.n_books} pre-1929 novels in this corpus, one row per book; genre is the cluster each novel's own prose places it in. A curated research corpus, not every novel published.`,
+    open_on_site: link({ p: "genres" }),
+  };
+}
+
+function didInfluence(args) {
+  const out = influenceChain(args);
+  if (out.__error || !out.found || !out.from) return out;
+  const direct = INF.documented.find(d => d.from === out.from && d.to === out.to), reverse = INF.documented.find(d => d.from === out.to && d.to === out.from);
+  const answer = direct ? `Yes: ${out.from} influenced ${out.to} directly (sources: ${direct.sources.join(", ")}).`
+    : reverse ? `Not that way round: the documented link runs from ${out.to} to ${out.from} (sources: ${reverse.sources.join(", ")}).`
+    : out.chain ? `No direct documented link. They connect through ${out.links} links: ${out.chain.join(" → ")}.`
+    : `No documented link and no chain connects them in this network.`;
+  return { answer, direct_link: !!direct, reverse_link: !!reverse, ...out };
+}
+
+const listGenres = () => genreHistory({});
+
 // ------------------------------------------------------------------ MCP surface
 const err = msg => ({ __error: msg });
 const T = (name, title, description, properties, required = []) => ({ name, title, description, inputSchema: { type: "object", properties, required, additionalProperties: false }, annotations: { title, ...ANN } });
@@ -361,11 +464,33 @@ const TOOLS = [
   T("genre_history", "When a genre formed in the prose, and when its name caught on",
     "For 'when did detective fiction emerge', 'when did people start saying \"Gothic novel\"', 'is mystery fiction just detective fiction renamed', 'what genres are there'. The prose cluster (when it first forms, its novels, earliest and latest) and the genre-name clock from Google Books (first attested, the years it reached 10% and half of its mentions, the peak, mentions per billion words every 20 years). Leave genre empty to list every genre and clock.",
     { genre: { type: "string", description: "A genre or its name, e.g. 'detective fiction', 'gothic novel', 'sea story', 'western'. Empty = list all." } }),
+  T("books_like", "Novels like a given classic, by genre and by emotional arc",
+    `Novels in this corpus most like a given one, two measured ways: the same genre by the novel's own prose (nearest in year) and the emotional arcs that move most alike, plus the ones that are alike both ways. Over ${G.n_books} pre-1929 novels.\n\nExample questions:\n- "Books like Dracula"\n- "If I loved Jane Eyre, what should I read next?"\n- "Novels similar to The Count of Monte Cristo"`,
+    { title: { type: "string", description: "The novel's title, e.g. 'Dracula'" }, author: { type: "string", description: "Optional author, to pick between similar titles" } }, ["title"]),
+  T("does_book_have_a_happy_ending", "Whether a classic novel ends happier or sadder than it begins",
+    `A one-line verdict on whether a novel ends happier or sadder than it begins, from the sentiment of its full text, then the full arc reading (start, end, change and its rank, shape, sharpest turn, alike novels). ${SCORED} novels scored, ${SPAN}.\n\nExample questions:\n- "Does Great Expectations have a happy ending?"\n- "Is Tess of the d'Urbervilles sad?"\n- "How does Wuthering Heights end, emotionally?"`,
+    { title: { type: "string", description: "The novel's title, e.g. 'Great Expectations'" }, author: { type: "string", description: "Optional author" } }, ["title"]),
+  T("saddest_and_happiest_novels", "The saddest and happiest classic novels, ranked by measured sentiment",
+    `Classic novels ranked by the sentiment of their full text: overall mood, mood of the ending, or how far the mood moves from first page to last. Optional year range. ${SCORED} novels scored, ${SPAN}.\n\nExample questions:\n- "What is the saddest classic novel?"\n- "Which Victorian novels have the happiest endings?"\n- "Novels that get darker as they go"`,
+    { direction: { type: "string", enum: ["saddest", "happiest", "both"], description: "Default both" }, measure: { type: "string", enum: ["overall", "ending", "change"], description: "overall = whole text (default), ending = last 10%, change = end minus start" }, from_year: { type: "integer" }, to_year: { type: "integer" }, limit: { type: "integer", minimum: 1, maximum: 25, description: "Default 10" } }),
+  T("novels_by_author", "A novelist's books in this corpus, with the genre each one's prose falls in",
+    `Every novel by one author in this corpus, in order of year, with the genre its prose places it in and how the author's novels split across genres.\n\nExample questions:\n- "What novels did Charles Dickens write?"\n- "Which Jane Austen books are covered?"\n- "Did Walter Scott write in more than one genre?"`,
+    { author: { type: "string", description: "The novelist, e.g. 'Charles Dickens'" } }, ["author"]),
+  T("classic_novels_from_era", "Classic novels from a year range, a decade or a genre",
+    `The novels in this corpus from a year range and/or a prose genre, oldest first, with each one's genre, how many match by genre, and whether its arc was scored. Corpus: ${G.n_books} pre-1929 novels.\n\nExample questions:\n- "Classic novels from the 1840s"\n- "Detective novels written before 1900"\n- "What sea stories were published between 1850 and 1900?"`,
+    { from_year: { type: "integer", description: "First year, e.g. 1840" }, to_year: { type: "integer", description: "Last year, e.g. 1849" }, genre: { type: "string", description: "Optional prose genre, e.g. 'Detective fiction', 'sea story', 'Historical romance'" }, limit: { type: "integer", minimum: 1, maximum: 100, description: "Default 40" } }),
+  T("did_author_influence", "Whether one author influenced another, directly or through a chain",
+    `A yes/no answer on whether one author influenced another: a direct documented link, a link running the other way, or the chain that connects them, then each link with its sources. ${NETWORK.length} authors.\n\nExample questions:\n- "Did Poe influence Arthur Conan Doyle?"\n- "Was Melville influenced by Shakespeare?"\n- "Did Dostoevsky read Dickens?"`,
+    { from_author: { type: "string", description: "The possible influence, e.g. 'Edgar Allan Poe'" }, to_author: { type: "string", description: "The possibly influenced author, e.g. 'Arthur Conan Doyle'" } }, ["from_author", "to_author"]),
+  T("what_genres_are_there", "Every genre recovered from the novels' prose, and every genre-name clock",
+    `The genres recovered from the prose of ${G.n_books} pre-1929 novels (size, span, when each cluster first forms) and the genre names tracked through Google Books (when each caught on).\n\nExample questions:\n- "What genres did 19th-century novels fall into?"\n- "When did the word 'western' catch on?"`,
+    {}),
 ];
 
-const HANDLERS = { novel_mood_arc: moodArc, writers_who_sound_like: soundsLike, influence_chain: influenceChain, author_influences: authorInfluences, genre_of_book: genreOfBook, genre_history: genreHistory };
+const HANDLERS = { novel_mood_arc: moodArc, writers_who_sound_like: soundsLike, influence_chain: influenceChain, author_influences: authorInfluences, genre_of_book: genreOfBook, genre_history: genreHistory,
+  books_like: booksLike, does_book_have_a_happy_ending: bookEndsHappy, saddest_and_happiest_novels: saddestHappiest, novels_by_author: novelsByAuthor, classic_novels_from_era: novelsFromEra, did_author_influence: didInfluence, what_genres_are_there: listGenres };
 
-const INSTRUCTIONS = `Classic Literature answers questions about classic novels and writers from measurements of their full texts: a novel's emotional arc (novel_mood_arc), writers whose prose or ideas sit closest (writers_who_sound_like), documented influence between authors (influence_chain, author_influences), and genres recovered from prose plus when each genre's name caught on (genre_of_book, genre_history). Quote numbers exactly as returned and never estimate one the tools did not return, including for a novel whose arc was not scored. A result with found: false is an answer: say the book or writer is not in this corpus and offer the closest matches; never substitute another. When did_you_mean lists several names, ask which one. Always give the open_on_site link.`;
+const INSTRUCTIONS = `Classic Literature answers questions about classic novels and writers from measurements of their full texts: a novel's emotional arc (novel_mood_arc), writers whose prose or ideas sit closest (writers_who_sound_like), documented influence between authors (influence_chain, author_influences), and genres recovered from prose plus when each genre's name caught on (genre_of_book, genre_history). Shortcuts for common questions: books_like, does_book_have_a_happy_ending, saddest_and_happiest_novels, novels_by_author, classic_novels_from_era, did_author_influence, what_genres_are_there. Quote numbers exactly as returned and never estimate one the tools did not return, including for a novel whose arc was not scored. A result with found: false is an answer: say the book or writer is not in this corpus and offer the closest matches; never substitute another. When did_you_mean lists several names, ask which one. Always give the open_on_site link.`;
 
 function callTool(name, args = {}) {
   const h = HANDLERS[name];
@@ -375,12 +500,12 @@ function callTool(name, args = {}) {
   return { out };
 }
 
-async function logCall(tool, ok, ms, meta) {
+async function logCall(tool, ok, ms, meta, attempted) {
   if (process.env.CL_NO_ANALYTICS || meta.test) return;
   try {
     await fetch("https://us.i.posthog.com/capture/", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(1500),
       body: JSON.stringify({ api_key: PH_KEY, event: "mcp_tool_call", distinct_id: "classic-literature-mcp",
-        properties: { tool, ok, ms, site: "classic-literature", $process_person_profile: false, $geoip_disable: true, $lib: "classic-literature-mcp" } }) });
+        properties: { tool, ok, ms, ...(attempted ? { attempted } : {}), site: "classic-literature", $process_person_profile: false, $geoip_disable: true, $lib: "classic-literature-mcp" } }) });
   } catch (e) {}
 }
 
@@ -397,7 +522,7 @@ async function handleOne(msg, meta = {}) {
     let r;
     try { r = callTool(tool, (params && params.arguments) || {}); }
     catch (e) { r = { out: { ok: false, error: "Error: " + e.message }, isError: true }; }
-    await logCall(HANDLERS[tool] ? tool : "unknown", !r.isError, Date.now() - t0, meta);
+    await logCall(HANDLERS[tool] ? tool : "unknown", !r.isError, Date.now() - t0, meta, HANDLERS[tool] ? null : tool.replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 60));
     return ok({ ...asContent(r.out), ...(r.isError ? { isError: true } : {}) });
   }
   if (method === "resources/list") return ok({ resources: [] });
