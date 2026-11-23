@@ -200,3 +200,20 @@ ZIP: `chatgpt-plugin.zip`, built by `python3 scripts/build_chatgpt_plugin.py --l
 | `did_author_influence` | True | False | False | Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request. |
 | `what_genres_are_there` | True | False | False | Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request. |
 <!-- /chatgpt-hints -->
+
+## xAI marketplace (Grok Bot, Cursor, Grok) — SUBMITTED 2026-11-23
+
+Filed 2026-11-23T02:25:41Z at x.ai/bot/marketplace/submit-a-plugin; the page answered "Thanks for submitting your plugin!".
+Status: pending review (xAI replies by email to the work address). Destinations ticked: Grok (coming soon), Grok Bot,
+Cursor. Org Brick and Mortar AI LLC, handle `brickandmortar`. Name Classic Literature. Website https://classic-literature-bi.vercel.app/.
+Logo https://classic-literature-bi.vercel.app/icon-solid.png (solid plate, 1:1). MCP URL https://classic-literature-bi.vercel.app/api/mcp (the URL, never a repo). Cursor's Publisher Terms §3.1
+bar charging users "directly or indirectly" through the plugin; the connector itself is free.
+
+Description (593 chars):
+
+> Answers questions about classic novels and writers from measurements of their full texts. See a novel's emotional arc and whether it ends happier or sadder than it begins, find novels like a classic by genre and by arc, trace documented influence between authors, find writers whose prose sounds closest, and see the genre a novel's own prose places it in and when that genre's name caught on. Covers several hundred novels from Project Gutenberg plus published research. Every number is quoted from the measurements, and a book outside the corpus is reported as not found rather than guessed.
+
+Testing (493 chars):
+
+> No account or credentials needed. Add the MCP URL as a remote server, then try: 1) "Does Pride and Prejudice have a happy ending?" -> does_book_have_a_happy_ending: ends slightly sadder than it begins (0.15079 at the start, 0.13436 at the end). 2) "Did Plato influence Nietzsche?" -> did_author_influence: yes, a direct documented link, with sources. 3) "What are some novels like Moby-Dick?" -> books_like: genre from its prose (Nautical adventure) and the nearest novels by genre and by arc.
+
