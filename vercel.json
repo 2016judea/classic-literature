@@ -1,1 +1,30 @@
-{"outputDirectory": "site", "buildCommand": "", "installCommand": "npm install", "functions": {"api/ask.js": {"maxDuration": 30}, "api/mcp.js": {"maxDuration": 10}}}
+{
+  "outputDirectory": "site",
+  "buildCommand": "",
+  "installCommand": "npm install",
+  "functions": {
+    "api/ask.js": {
+      "maxDuration": 30
+    },
+    "api/mcp.js": {
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/.well-known/openai-apps-challenge",
+      "destination": "/api/openai-challenge"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/demo/(.*)",
+      "headers": [
+        {
+          "key": "x-robots-tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    }
+  ]
+}

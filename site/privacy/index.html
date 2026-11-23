@@ -55,17 +55,29 @@ if(me){posthog.opt_out_capturing();}else{if(p==="0")posthog.opt_in_capturing();p
 <header><div class="wrap"><img src="/favicon.svg" alt=""><a href="/">Classic Literature</a></div></header>
 <main class="wrap">
 <h1>Privacy</h1>
-<p>Classic Literature needs nothing about you: no account, no name, no email.</p>
-<h2>The connector</h2>
-<p>A title or name you ask about is matched against the corpus and then dropped. It is not stored and not logged. For each call we record one event in PostHog: which tool ran, whether it worked, and how long it took. That event carries nothing that identifies you or your conversation: no IP address, no account, and none of your words.</p>
-<p>The server runs on Vercel, which keeps standard request logs (time, path, status) under <a href="https://vercel.com/legal/privacy-policy">its own privacy policy</a>. The request body, which holds your question, is not written to those logs.</p>
+<p>Last updated November 22, 2026. Classic Literature is run by Brick and Mortar AI LLC, Saint Paul, Minnesota, which is responsible for the connector and this site. It needs nothing about you: no account, no name, no email.</p>
+<h2>What the connector receives</h2>
+<p>Only what your assistant (Claude, ChatGPT or another app) sends with a tool call: a book title, an author's name, an era or a genre. It does not receive your conversation, your name, your email or your account with that app.</p>
+<h2>What it does with it</h2>
+<p>The title or name is matched against the corpus and then dropped when the call ends. It is not stored, not logged, not used to train any model, and not sold or shared. No model runs on our side when the connector answers.</p>
+<h2>What is counted</h2>
+<p>For each call we record one event in PostHog: which tool ran, whether it worked, and how long it took. That event carries nothing that identifies you or your conversation: no IP address, no account, and none of your words. These events are kept while the connector runs, to see which tools are used and which fail.</p>
 <h2>This website</h2>
-<p>We count visits with Vercel Web Analytics and PostHog: the pages viewed, and whether a visit came from the connector (links it hands out carry <code>src=mcp</code>). Links carry the page and the book or author you were looking at, never anything about you.</p>
+<p>We count visits with Vercel Web Analytics (no cookies) and PostHog: the pages viewed, and whether a visit came from the connector (links it hands out carry <code>src=mcp</code>). Links carry the page and the book or author you were looking at, never anything about you.</p>
+<p>If you type a question into the website's question box, it is sent to Anthropic's API, together with a summary of the site's own data, to choose which chart to show. The question is not stored by us. Each IP address is limited to a few questions every ten minutes; that count is held in memory and not written anywhere.</p>
+<h2>Who else handles it</h2>
+<p>Vercel hosts the connector and this site and keeps standard request logs (time, path, status) under <a href="https://vercel.com/legal/privacy-policy">its own privacy policy</a>. The request body, which holds your question, is not written to those logs. PostHog stores the counts above. Anthropic receives a website question as described. Nothing is sold.</p>
 <h2>The data</h2>
 <p>Measurements of public-domain texts from Project Gutenberg and published research. Cormac McCarthy's novels are in copyright and are not redistributed; only derived measurements appear.</p>
-<p>Questions: open an issue at <a href="https://github.com/2016judea/classic-literature/issues">github.com/2016judea/classic-literature/issues</a>.</p>
+<h2>Your choices</h2>
+<p>You can disconnect the connector in your app's settings at any time. Because nothing kept here identifies you, there is no personal data held to access, export or delete; write to us if you want that confirmed.</p>
+<h2>Children</h2>
+<p>The connector and site are not directed at children under 13 and do not knowingly receive their information.</p>
+<h2>Changes</h2>
+<p>If this policy changes, the date at the top changes with it.</p>
+<p>Questions or privacy requests: <a href="https://brickandmortar.dev/contact">brickandmortar.dev/contact</a>.</p>
 </main>
 <footer><div class="wrap"><p>Every number comes from measurements of the books' full texts, published with the code at <a href="https://github.com/2016judea/classic-literature">github.com/2016judea/classic-literature</a>.</p>
-<p><a href="/">The workspace</a> · <a href="/connect/">Use it in Claude</a> · <a href="/privacy/">Privacy</a> · <a href="https://github.com/2016judea/classic-literature/issues">Support</a></p></div></footer>
+<p><a href="/">The workspace</a> · <a href="/connect/">Use it in Claude</a> · <a href="/privacy/">Privacy</a> · <a href="https://brickandmortar.dev/contact">Support</a></p></div></footer>
 </body>
 </html>

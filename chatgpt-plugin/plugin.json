@@ -1,0 +1,117 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "classic-literature",
+  "version": "1.0.0",
+  "description": "Answers questions about classic novels and writers from measurements of their full texts. See a novel's emotional arc and whether it ends happier or sadder than it begins, find novels like a classic by genre and by arc, trace documented influence between authors, find writers whose prose sounds closest, and see the genre a novel's own prose places it in and when that genre's name caught on. Covers several hundred novels from Project Gutenberg plus published research. Every number is quoted from the measurements, and a book outside the corpus is reported as not found rather than guessed.",
+  "author": {
+    "name": "Brick and Mortar AI LLC",
+    "url": "https://classic-literature-bi.vercel.app/"
+  },
+  "homepage": "https://classic-literature-bi.vercel.app/",
+  "license": "LicenseRef-All-Rights-Reserved",
+  "keywords": [
+    "classic novels",
+    "literature",
+    "emotional arc",
+    "literary influence",
+    "genre",
+    "books like",
+    "reading"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Classic Literature",
+        "shortDescription": "Novel arcs, genres, influence",
+        "longDescription": "Answers questions about classic novels and writers from measurements of their full texts. See a novel's emotional arc and whether it ends happier or sadder than it begins, find novels like a classic by genre and by arc, trace documented influence between authors, find writers whose prose sounds closest, and see the genre a novel's own prose places it in and when that genre's name caught on. Covers several hundred novels from Project Gutenberg plus published research. Every number is quoted from the measurements, and a book outside the corpus is reported as not found rather than guessed.",
+        "developerName": "Brick and Mortar AI LLC",
+        "category": "Education",
+        "capabilities": [],
+        "websiteURL": "https://classic-literature-bi.vercel.app/",
+        "supportURL": "https://brickandmortar.dev/contact",
+        "privacyPolicyURL": "https://classic-literature-bi.vercel.app/privacy/",
+        "termsOfServiceURL": "https://brickandmortar.dev/license/",
+        "defaultPrompt": [
+          "Does Pride and Prejudice have a happy ending?",
+          "Find novels like Moby-Dick",
+          "Did Plato influence Nietzsche?"
+        ],
+        "logo": "./assets/logo.png",
+        "composerIcon": "./assets/composer-icon.png",
+        "composerIconDark": "./assets/composer-icon-dark.png"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Happy or sad ending, measured",
+              "prompt": "Does Pride and Prejudice have a happy ending?",
+              "tools_triggered": [
+                "does_book_have_a_happy_ending"
+              ],
+              "expected_behavior": "Calls does_book_have_a_happy_ending and reports that by measured sentiment it ends slightly sadder than it begins (0.15079 at the start, 0.13436 at the end), quoting the numbers exactly and giving the open_on_site link."
+            },
+            {
+              "description": "Novels like a classic",
+              "prompt": "What are some novels like Moby-Dick?",
+              "tools_triggered": [
+                "books_like"
+              ],
+              "expected_behavior": "Calls books_like, names Moby-Dick's genre from its prose (Nautical adventure) and lists the novels nearest by genre and by arc as returned."
+            },
+            {
+              "description": "Influence between two authors",
+              "prompt": "Did Plato influence Nietzsche?",
+              "tools_triggered": [
+                "did_author_influence"
+              ],
+              "expected_behavior": "Calls did_author_influence and answers yes, a direct documented link, naming the sources returned for it."
+            },
+            {
+              "description": "A novelist's books",
+              "prompt": "Which Dickens novels are in here, and what genre is each?",
+              "tools_triggered": [
+                "novels_by_author"
+              ],
+              "expected_behavior": "Calls novels_by_author and lists the 8 Dickens novels in the corpus with the genre their prose falls in."
+            },
+            {
+              "description": "The saddest novels",
+              "prompt": "What are the saddest classic novels?",
+              "tools_triggered": [
+                "saddest_and_happiest_novels"
+              ],
+              "expected_behavior": "Calls saddest_and_happiest_novels and ranks the saddest by mean measured sentiment, starting with The Island of Doctor Moreau, quoting each score exactly."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Book not in the corpus",
+              "prompt": "What's the emotional arc of the latest Sally Rooney novel?",
+              "expected_behavior": "If a tool is called it returns found: false; the assistant says the book is not in this corpus and offers the closest matches, never substituting another book's arc or estimating one."
+            },
+            {
+              "description": "Writing new fiction",
+              "prompt": "Write me a short story in the style of Dickens.",
+              "expected_behavior": "Does not call Classic Literature; the tools measure existing novels and do not write fiction."
+            },
+            {
+              "description": "Buying a book",
+              "prompt": "Where can I buy a cheap copy of Middlemarch?",
+              "expected_behavior": "Does not call Classic Literature; it holds measurements of texts, not bookstore listings."
+            }
+          ]
+        },
+        "demo_recording_url": "https://classic-literature-bi.vercel.app/demo/chatgpt/",
+        "commerce": false,
+        "commerce_description": "No purchase or payment happens in ChatGPT, and no tool offers, prices or links to one."
+      },
+      "publication": {
+        "countries": [
+          "US"
+        ],
+        "release_notes": "First ChatGPT release: thirteen read-only tools over measured classic novels (emotional arcs, happy or sad endings, books like a title, genres from prose, documented influence between authors)."
+      }
+    }
+  }
+}

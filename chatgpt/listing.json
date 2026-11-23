@@ -1,0 +1,223 @@
+{
+  "name": "classic-literature",
+  "version": "1.0.0",
+  "dated": "2026-11-22",
+  "mcp_url": "https://classic-literature-bi.vercel.app/api/mcp",
+  "server_key": "classic-literature",
+  "logo_src": "site/icon.png",
+  "composer_svg": "site/icon-composer.svg",
+  "keywords": [
+    "classic novels",
+    "literature",
+    "emotional arc",
+    "literary influence",
+    "genre",
+    "books like",
+    "reading"
+  ],
+  "description": "Answers questions about classic novels and writers from measurements of their full texts. See a novel's emotional arc and whether it ends happier or sadder than it begins, find novels like a classic by genre and by arc, trace documented influence between authors, find writers whose prose sounds closest, and see the genre a novel's own prose places it in and when that genre's name caught on. Covers several hundred novels from Project Gutenberg plus published research. Every number is quoted from the measurements, and a book outside the corpus is reported as not found rather than guessed.",
+  "interface": {
+    "displayName": "Classic Literature",
+    "shortDescription": "Novel arcs, genres, influence",
+    "category": "Education",
+    "websiteURL": "https://classic-literature-bi.vercel.app/",
+    "supportURL": "https://brickandmortar.dev/contact",
+    "privacyPolicyURL": "https://classic-literature-bi.vercel.app/privacy/",
+    "termsOfServiceURL": "https://brickandmortar.dev/license/",
+    "defaultPrompt": [
+      "Does Pride and Prejudice have a happy ending?",
+      "Find novels like Moby-Dick",
+      "Did Plato influence Nietzsche?"
+    ]
+  },
+  "demo_recording_url": "https://classic-literature-bi.vercel.app/demo/chatgpt/",
+  "release_notes": "First ChatGPT release: thirteen read-only tools over measured classic novels (emotional arcs, happy or sad endings, books like a title, genres from prose, documented influence between authors).",
+  "test_cases": {
+    "positive": [
+      {
+        "description": "Happy or sad ending, measured",
+        "prompt": "Does Pride and Prejudice have a happy ending?",
+        "tools_triggered": [
+          "does_book_have_a_happy_ending"
+        ],
+        "call": {
+          "tool": "does_book_have_a_happy_ending",
+          "arguments": {
+            "title": "Pride and Prejudice"
+          }
+        },
+        "expect_in_result": [
+          "ends sadder than it begins"
+        ],
+        "expected_behavior": "Calls does_book_have_a_happy_ending and reports that by measured sentiment it ends slightly sadder than it begins (0.15079 at the start, 0.13436 at the end), quoting the numbers exactly and giving the open_on_site link."
+      },
+      {
+        "description": "Novels like a classic",
+        "prompt": "What are some novels like Moby-Dick?",
+        "tools_triggered": [
+          "books_like"
+        ],
+        "call": {
+          "tool": "books_like",
+          "arguments": {
+            "title": "Moby Dick"
+          }
+        },
+        "expect_in_result": [
+          "Nautical adventure"
+        ],
+        "expected_behavior": "Calls books_like, names Moby-Dick's genre from its prose (Nautical adventure) and lists the novels nearest by genre and by arc as returned."
+      },
+      {
+        "description": "Influence between two authors",
+        "prompt": "Did Plato influence Nietzsche?",
+        "tools_triggered": [
+          "did_author_influence"
+        ],
+        "call": {
+          "tool": "did_author_influence",
+          "arguments": {
+            "from_author": "Plato",
+            "to_author": "Nietzsche"
+          }
+        },
+        "expect_in_result": [
+          "directly"
+        ],
+        "expected_behavior": "Calls did_author_influence and answers yes, a direct documented link, naming the sources returned for it."
+      },
+      {
+        "description": "A novelist's books",
+        "prompt": "Which Dickens novels are in here, and what genre is each?",
+        "tools_triggered": [
+          "novels_by_author"
+        ],
+        "call": {
+          "tool": "novels_by_author",
+          "arguments": {
+            "author": "Charles Dickens"
+          }
+        },
+        "expect_in_result": [
+          "Victorian serialized fiction"
+        ],
+        "expected_behavior": "Calls novels_by_author and lists the 8 Dickens novels in the corpus with the genre their prose falls in."
+      },
+      {
+        "description": "The saddest novels",
+        "prompt": "What are the saddest classic novels?",
+        "tools_triggered": [
+          "saddest_and_happiest_novels"
+        ],
+        "call": {
+          "tool": "saddest_and_happiest_novels",
+          "arguments": {
+            "direction": "saddest",
+            "limit": 3
+          }
+        },
+        "expect_in_result": [
+          "The Island of Doctor Moreau"
+        ],
+        "expected_behavior": "Calls saddest_and_happiest_novels and ranks the saddest by mean measured sentiment, starting with The Island of Doctor Moreau, quoting each score exactly."
+      }
+    ],
+    "negative": [
+      {
+        "description": "Book not in the corpus",
+        "prompt": "What's the emotional arc of the latest Sally Rooney novel?",
+        "expected_behavior": "If a tool is called it returns found: false; the assistant says the book is not in this corpus and offers the closest matches, never substituting another book's arc or estimating one."
+      },
+      {
+        "description": "Writing new fiction",
+        "prompt": "Write me a short story in the style of Dickens.",
+        "expected_behavior": "Does not call Classic Literature; the tools measure existing novels and do not write fiction."
+      },
+      {
+        "description": "Buying a book",
+        "prompt": "Where can I buy a cheap copy of Middlemarch?",
+        "expected_behavior": "Does not call Classic Literature; it holds measurements of texts, not bookstore listings."
+      }
+    ]
+  },
+  "hints": {
+    "novel_mood_arc": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "writers_who_sound_like": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "influence_chain": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "author_influences": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "genre_of_book": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "genre_history": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "books_like": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "does_book_have_a_happy_ending": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "saddest_and_happiest_novels": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "novels_by_author": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "classic_novels_from_era": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "did_author_influence": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    },
+    "what_genres_are_there": {
+      "readOnly": true,
+      "destructive": false,
+      "openWorld": false,
+      "why": "Reads measurements precomputed from the novels' full texts and bundled with the server; changes nothing and makes no outside request."
+    }
+  }
+}
