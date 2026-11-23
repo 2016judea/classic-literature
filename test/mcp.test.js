@@ -191,6 +191,7 @@ test("theme doors wrap the engines and answer in the user's terms", async () => 
   const happy = (await c("does_book_have_a_happy_ending", { title: "Tess of the d'Urbervilles" })).structuredContent;
   assert.strictEqual(happy.ends_happier_or_sadder, "sadder");
   assert.match(happy.answer, /ends sadder than it begins/);
+  assert.strictEqual((await c("does_book_have_a_happy_ending", { title: "Wuthering Heights" })).structuredContent.ends_happier_or_sadder, "about level");
   const like = (await c("books_like", { title: "Moby-Dick" })).structuredContent;
   assert.ok(like.found && like.same_genre_by_prose_nearest_in_time.length && like.emotional_arc_moves_most_alike.length);
   const sad = (await c("saddest_and_happiest_novels", { direction: "saddest", limit: 3 })).structuredContent;

@@ -364,11 +364,14 @@ function booksLike(args) {
   };
 }
 
+// Under this start-to-end change a novel reads as ending where it began (the smallest ~11%, measured 2026-11-22).
+const LEVEL = 0.005, LEVEL_SHARE = Math.round(100 * SEN.arcs.filter(a => Math.abs(changeOf(a)) < 0.005).length / SCORED);
 function bookEndsHappy(args) {
   const out = moodArc({ title: args.title, author: args.author });
   if (out.__error || !out.found || out.scored === false) return out;
-  const verdict = out.change_end_minus_start > 0 ? "happier" : out.change_end_minus_start < 0 ? "sadder" : "level";
-  return { answer: `${out.novel.title} ends ${verdict} than it begins: sentiment ${out.start} at the start, ${out.end} at the end (change ${out.change_end_minus_start}; rank ${out.change_rank}). Shape: ${out.shape}, ${out.shape_means}.`, ...out, ends_happier_or_sadder: verdict };
+  const d = out.change_end_minus_start, level = Math.abs(d) < LEVEL;
+  const verdict = level ? "about level" : d > 0 ? "happier" : "sadder";
+  return { answer: `${out.novel.title} ${level ? `ends about where it begins (a change under ${LEVEL}; ${LEVEL_SHARE}% of novels move this little)` : `ends ${verdict} than it begins`}: sentiment ${out.start} at the start, ${out.end} at the end (change ${out.change_end_minus_start}; rank ${out.change_rank}). Shape: ${out.shape}, ${out.shape_means}.`, ...out, ends_happier_or_sadder: verdict };
 }
 
 const MEASURES = {
