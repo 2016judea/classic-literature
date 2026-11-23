@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.2016judea/classic-literature",
+  "title": "Classic Literature",
+  "description": "Emotional arcs, influence chains, prose look-alikes and genres of classic novels, from full texts",
+  "version": "1.0.0",
+  "websiteUrl": "https://classic-literature-bi.vercel.app/",
+  "repository": {
+    "url": "https://github.com/2016judea/classic-literature",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://classic-literature-bi.vercel.app/api/mcp"
+    }
+  ]
+}

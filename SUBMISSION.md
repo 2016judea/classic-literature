@@ -176,3 +176,5 @@ endpoint before ticking it. All seven compliance boxes ticked; the additional no
 **Portal mechanics that cost a cycle:** "Connectors" moved out of Settings into Customize; the directory form's
 own "Add custom connector" does the job. Chrome throttles timers in a hidden tab, so an in-page `await sleep()`
 can stall for minutes: drive each step as a synchronous `execute` and wait outside the page.
+
+**Official MCP Registry (2026-11-22):** `io.github.2016judea/classic-literature` 1.0.0, remote `https://classic-literature-bi.vercel.app/api/mcp`; `.github/workflows/mcp-registry.yml` republishes on every `server.json` version bump. Check: `curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.2016judea/classic-literature"`.
