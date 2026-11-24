@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Privacy · Classic Literature</title>
-<meta name="description" content="What the Classic Literature site and its Claude connector record: the tool, whether it worked and how long it took. Nothing identifying, and never your words.">
+<meta name="description" content="What the Classic Literature site and its Claude connector record: the tool, whether it worked, how long it took and which app called it. Nothing identifying, and never your words.">
 <link rel="canonical" href="https://classic-literature-bi.vercel.app/privacy/">
-<meta property="og:title" content="Privacy · Classic Literature"><meta property="og:description" content="What the Classic Literature site and its Claude connector record: the tool, whether it worked and how long it took. Nothing identifying, and never your words."><meta property="og:url" content="https://classic-literature-bi.vercel.app/privacy/"><meta property="og:type" content="website">
+<meta property="og:title" content="Privacy · Classic Literature"><meta property="og:description" content="What the Classic Literature site and its Claude connector record: the tool, whether it worked, how long it took and which app called it. Nothing identifying, and never your words."><meta property="og:url" content="https://classic-literature-bi.vercel.app/privacy/"><meta property="og:type" content="website">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
 :root{color-scheme:light;--bg:#f3f3f1;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--muted:#6c6b66;--border:#dcdbd5;--link:#1c5cab;--code:#ecebe6}
@@ -61,7 +61,7 @@ if(me){posthog.opt_out_capturing();}else{if(p==="0")posthog.opt_in_capturing();p
 <h2>What it does with it</h2>
 <p>The title or name is matched against the corpus and then dropped when the call ends. It is not stored, not logged, not used to train any model, and not sold or shared. No model runs on our side when the connector answers.</p>
 <h2>What is counted</h2>
-<p>For each call we record one event in PostHog: which tool ran, whether it worked, and how long it took. That event carries nothing that identifies you or your conversation: no IP address, no account, and none of your words. These events are kept while the connector runs, to see which tools are used and which fail.</p>
+<p>For each call we record one event in PostHog: which tool ran, whether it worked, how long it took, and the name of the app that called it (such as Claude or ChatGPT). That event carries nothing that identifies you or your conversation: no IP address, no account, and none of your words. These events are kept while the connector runs, to see which tools are used and which fail.</p>
 <h2>This website</h2>
 <p>We count visits with Vercel Web Analytics (no cookies) and PostHog: the pages viewed, and whether a visit came from the connector (links it hands out carry <code>src=mcp</code>). Links carry the page and the book or author you were looking at, never anything about you.</p>
 <p>If you type a question into the website's question box, it is sent to Anthropic's API, together with a summary of the site's own data, to choose which chart to show. The question is not stored by us. Each IP address is limited to a few questions every ten minutes; that count is held in memory and not written anywhere.</p>

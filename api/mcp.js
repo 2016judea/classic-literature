@@ -503,12 +503,16 @@ function callTool(name, args = {}) {
   return { out };
 }
 
+// The calling app, from its user-agent (Claude-User, openai-mcp, a crawler's name): no person, only the app.
+const clientOf = (ua) => (/claude/i.test(ua) ? "claude" : /openai|chatgpt/i.test(ua) ? "chatgpt" : /grok|xai/i.test(ua) ? "grok" : /cursor/i.test(ua) ? "cursor" : /node|undici|python|curl/i.test(ua) ? "script" : "other");
+const clientProps = (ua = "") => ({ client: clientOf(ua), client_ua: ua.split(/[\/\s]/)[0].slice(0, 40), client_ua_full: ua.slice(0, 120) });
+
 async function logCall(tool, ok, ms, meta, attempted) {
   if (process.env.CL_NO_ANALYTICS || meta.test) return;
   try {
     await fetch("https://us.i.posthog.com/capture/", { method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(1500),
       body: JSON.stringify({ api_key: PH_KEY, event: "mcp_tool_call", distinct_id: "classic-literature-mcp",
-        properties: { tool, ok, ms, ...(attempted ? { attempted } : {}), site: "classic-literature", $process_person_profile: false, $geoip_disable: true, $lib: "classic-literature-mcp" } }) });
+        properties: { tool, ok, ms, ...(attempted ? { attempted } : {}), ...clientProps(meta.ua), site: "classic-literature", $process_person_profile: false, $geoip_disable: true, $lib: "classic-literature-mcp" } }) });
   } catch (e) {}
 }
 
@@ -551,7 +555,8 @@ module.exports = async function handler(req, res) {
   if (req.method === "DELETE") { res.statusCode = 204; return res.end(); }
   let body;
   try { body = await readBody(req); } catch (e) { res.statusCode = 400; res.setHeader("content-type", "application/json"); return res.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } })); }
-  const meta = { test: !!req.headers["x-cl-test"] };
+  const ua = String(req.headers["user-agent"] || "");
+  const meta = { test: !!req.headers["x-cl-test"], ua };
   const batch = Array.isArray(body);
   const out = (await Promise.all((batch ? body : [body]).map(m => handleOne(m, meta)))).filter(Boolean);
   if (!out.length) { res.statusCode = 202; return res.end(); }
